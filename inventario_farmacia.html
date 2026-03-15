@@ -6,7 +6,6 @@
 <title>Inventario — Farmacia</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"></script>
 <style>
   :root {
     --bg: #0f1117;
@@ -172,7 +171,7 @@
           <div class="scan-line"></div>
         </div>
       </div>
-      <div class="scan-label">Centra el código de barras</div>
+      <div class="scan-label"><span id="scan-label-text">Centra el código de barras</span></div>
     </div>
     <div class="scan-result" id="scan-result" style="display:none;">
       <div>
@@ -467,9 +466,11 @@ function switchTab(tab) {
   if (tab !== 'captura' && scannerRunning) stopScanner();
 }
 
-// ── Scanner (ZXing — iPhone 14 Pro compatible) ───────────────────────
-let zxingReader = null;
-let zxingControls = null;
+// ── Scanner (BarcodeDetector nativo — sin librerías externas) ────────
+let scanStream = null;
+let scanAnimFrame = null;
+let scanCanvas = null;
+let scanCtx = null;
 
 function toggleScanner() {
   if (scannerRunning) stopScanner();
@@ -477,6 +478,12 @@ function toggleScanner() {
 }
 
 async function startScanner() {
+  // Verificar soporte
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Tu navegador no soporta cámara', 'error');
+    return;
+  }
+
   document.getElementById('scanner-container').style.display = 'block';
   document.getElementById('scan-btn').classList.add('scanning');
   document.getElementById('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="4.22" y1="4.22" x2="19.78" y2="19.78"/></svg> Detener cámara`;
@@ -484,57 +491,95 @@ async function startScanner() {
   try {
     const video = document.getElementById('scanner-video');
 
-    // Solicitar cámara trasera con autofocus continuo — clave para iPhone 14 Pro
-    const stream = await navigator.mediaDevices.getUserMedia({
+    // Constraints simples — más compatibles con iOS
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
       video: {
         facingMode: { ideal: 'environment' },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        focusMode: { ideal: 'continuous' },
-        zoom: { ideal: 1 }
+        width:  { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720,  max: 1080 },
       }
     });
-    video.srcObject = stream;
+
+    video.srcObject = scanStream;
+    video.setAttribute('playsinline', true);
+    video.setAttribute('muted', true);
     await video.play();
     scannerRunning = true;
 
-    // ZXing MultiFormatReader — soporta EAN-13, EAN-8, Code128, QR, etc.
-    zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
+    // Canvas oculto para capturar frames
+    scanCanvas = document.createElement('canvas');
+    scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
 
-    zxingControls = await zxingReader.decodeFromVideoElement(video, (result, err) => {
-      if (result) {
-        const code = result.getText();
-        if (code === lastScanned) return;
-        lastScanned = code;
-        document.getElementById('f-codigo').value = code;
-        document.getElementById('scan-code-text').textContent = code;
-        document.getElementById('scan-result').style.display = 'flex';
-        showToast('Código: ' + code, 'success');
-        if (navigator.vibrate) navigator.vibrate(60);
-        stopScanner();
-        setTimeout(() => document.getElementById('f-desc').focus(), 300);
-      }
-    });
+    // Intentar BarcodeDetector nativo (Safari 17.4+, Chrome 88+)
+    if ('BarcodeDetector' in window) {
+      startNativeDetector(video);
+    } else {
+      // Fallback: mostrar video y pedir código manual
+      showManualFallback();
+    }
 
   } catch (err) {
-    console.error(err);
-    showToast('No se pudo acceder a la cámara', 'error');
+    const msg = err.name === 'NotAllowedError'  ? 'Permiso de cámara denegado — ve a Ajustes → Safari → Cámara' :
+                err.name === 'NotFoundError'     ? 'No se encontró cámara en este dispositivo' :
+                err.name === 'NotReadableError'  ? 'La cámara está en uso por otra app' :
+                err.name === 'OverconstrainedError' ? 'Cámara no compatible con los requisitos' :
+                'Error: ' + err.message;
+    showToast(msg, 'error');
+    document.getElementById('scan-label-text').textContent = msg;
     stopScanner();
   }
 }
 
-function stopScanner() {
-  // Detener ZXing
-  if (zxingControls) { try { zxingControls.stop(); } catch(e){} zxingControls = null; }
-  if (zxingReader) { try { zxingReader.reset(); } catch(e){} zxingReader = null; }
+function startNativeDetector(video) {
+  const detector = new BarcodeDetector({
+    formats: ['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code','data_matrix']
+  });
 
-  // Detener stream de video directamente
-  const video = document.getElementById('scanner-video');
-  if (video && video.srcObject) {
-    video.srcObject.getTracks().forEach(t => t.stop());
-    video.srcObject = null;
+  async function tick() {
+    if (!scannerRunning) return;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      scanCanvas.width  = video.videoWidth;
+      scanCanvas.height = video.videoHeight;
+      scanCtx.drawImage(video, 0, 0);
+      try {
+        const barcodes = await detector.detect(scanCanvas);
+        if (barcodes.length > 0) {
+          const code = barcodes[0].rawValue;
+          if (code !== lastScanned) onCodeDetected(code);
+          return;
+        }
+      } catch(e) {}
+    }
+    scanAnimFrame = requestAnimationFrame(tick);
   }
+  scanAnimFrame = requestAnimationFrame(tick);
+}
 
+function showManualFallback() {
+  // El video sigue mostrándose — solo cambia el label
+  document.getElementById('scan-label-text').textContent =
+    'Escáner no disponible — ingresa el código manualmente';
+  showToast('Ingresa el código manualmente en el campo', 'error');
+  stopScanner();
+}
+
+function onCodeDetected(code) {
+  lastScanned = code;
+  document.getElementById('f-codigo').value = code;
+  document.getElementById('scan-code-text').textContent = code;
+  document.getElementById('scan-result').style.display = 'flex';
+  showToast('✓ Código: ' + code, 'success');
+  if (navigator.vibrate) navigator.vibrate(60);
+  stopScanner();
+  setTimeout(() => document.getElementById('f-desc').focus(), 300);
+}
+
+function stopScanner() {
+  if (scanAnimFrame) { cancelAnimationFrame(scanAnimFrame); scanAnimFrame = null; }
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  const video = document.getElementById('scanner-video');
+  if (video) { video.srcObject = null; }
   scannerRunning = false;
   document.getElementById('scanner-container').style.display = 'none';
   document.getElementById('scan-btn').classList.remove('scanning');
