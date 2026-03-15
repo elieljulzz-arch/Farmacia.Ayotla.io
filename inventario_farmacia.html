@@ -6,7 +6,7 @@
 <title>Inventario — Farmacia</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js"></script>
 <style>
   :root {
     --bg: #0f1117;
@@ -166,7 +166,7 @@
 
   <div id="scanner-container" style="display:none;">
     <div id="scanner-box">
-      <div id="scanner-video"></div>
+      <video id="scanner-video" autoplay playsinline muted></video>
       <div class="scan-overlay">
         <div class="scan-frame">
           <div class="scan-line"></div>
@@ -225,12 +225,39 @@
         <label>Departamento</label>
         <select id="f-dept">
           <option value="">Selecciona...</option>
-          <option value="Genérico">Genérico</option>
-          <option value="Patente">Patente</option>
-          <option value="OTC">OTC / Sin receta</option>
-          <option value="Curación">Material de curación</option>
-          <option value="Suplementos">Suplementos</option>
-          <option value="Leche infantil">Leche infantil</option>
+          <option value="Generico Tab N">Genérico Tab</option>
+          <option value="Generico Jbe N">Genérico Jarabe</option>
+          <option value="Patente Tab N">Patente Tab</option>
+          <option value="Patente Jbe N">Patente Jarabe</option>
+          <option value="Jbe-Susp/Patente">Jbe-Susp/Patente</option>
+          <option value="Pastillas/Patente">Pastillas/Patente</option>
+          <option value="Pomadas/Patente">Pomadas/Patente</option>
+          <option value="Gotas/Patente">Gotas/Patente</option>
+          <option value="Ampolletas N">Ampolletas</option>
+          <option value="Ovulo/supositorio">Óvulo/Supositorio</option>
+          <option value="material de curacion">Material de curación</option>
+          <option value="Leches/complementos">Leches/Complementos</option>
+          <option value="Vit/suplementos">Vit/Suplementos</option>
+          <option value="Naturista">Naturista</option>
+          <option value="Electrolitos">Electrolitos</option>
+          <option value="bebe">Bebé</option>
+          <option value="pañal">Pañal</option>
+          <option value="Perf/Baño">Perf/Baño</option>
+          <option value="Perf/toallas">Perf/Toallas</option>
+          <option value="Perfumeria/Cremas">Perfumería/Cremas</option>
+          <option value="Prf/Cabello">Prf/Cabello</option>
+          <option value="Cuidado Cabello">Cuidado Cabello</option>
+          <option value="Prfm/Desodorantes">Desodorantes</option>
+          <option value="higiene dental">Higiene Dental</option>
+          <option value="salud bucal">Salud Bucal</option>
+          <option value="Salud Sexual">Salud Sexual</option>
+          <option value="controlado">Controlado</option>
+          <option value="rebotica">Rebotica</option>
+          <option value="sobres">Sobres</option>
+          <option value="chocolates">Chocolates</option>
+          <option value="agua">Agua</option>
+          <option value="Suelto">Suelto</option>
+          <option value="- Sin Departamento -">Sin Departamento</option>
         </select>
       </div>
     </div>
@@ -267,8 +294,22 @@
 <!-- ═══ TAB EXPORTAR ═══ -->
 <div id="panel-exportar" class="panel">
   <div class="export-card">
+    <div class="export-title">Importar tu inventario actual</div>
+    <div class="export-desc">Carga tu archivo de Eleventa (.xlsx) para no capturar todo desde cero. Los precios con <strong>$</strong> se convierten automáticamente.</div>
+  </div>
+  <label style="display:block;margin-bottom:16px;">
+    <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none;" onchange="importExcel(event)">
+    <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()" style="margin-bottom:0;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      Cargar Inventario150326.xlsx
+    </button>
+  </label>
+
+  <div class="divider"></div>
+
+  <div class="export-card">
     <div class="export-title">Exportar para Eleventa</div>
-    <div class="export-desc">Genera un archivo Excel (.xlsx) listo para importar desde <strong>Inventario → Importar productos</strong> en Eleventa. Las columnas corresponden exactamente al formato requerido.</div>
+    <div class="export-desc">Genera el archivo con las columnas exactas de Eleventa, listo para <strong>Catálogo → Importar productos</strong>.</div>
   </div>
 
   <div class="stat-grid">
@@ -278,7 +319,7 @@
     </div>
     <div class="stat">
       <div class="stat-val" id="stat-low">0</div>
-      <div class="stat-lbl">Stock bajo</div>
+      <div class="stat-lbl">Sin mínimo</div>
     </div>
     <div class="stat">
       <div class="stat-val" id="stat-val">$0</div>
@@ -287,34 +328,33 @@
   </div>
 
   <div class="export-card" style="margin-top:0;">
-    <div class="export-title" style="font-size:12px;color:var(--muted);margin-bottom:8px;">Columnas que se exportan</div>
+    <div class="export-title" style="font-size:12px;color:var(--muted);margin-bottom:8px;">Columnas exportadas (formato Eleventa)</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;">
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">codigo</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">descripcion</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">precio_costo</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">precio_venta</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">precio_mayoreo</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">departamento</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">proveedor</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">cantidad_inventario</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">minimo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Código</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Producto</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">P. Costo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">P. Venta</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">P. Mayoreo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Existencia</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Inv. Mínimo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Inv. Máximo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Departamento</span>
     </div>
   </div>
 
   <button class="btn btn-export" onclick="exportExcel()" style="margin-top:4px;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-    Descargar inventario.xlsx
+    Descargar inventario_eleventa.xlsx
   </button>
 
   <div class="divider"></div>
   <div class="export-card">
     <div class="export-title" style="font-size:12px;">Cómo importar en Eleventa</div>
     <div class="export-desc" style="margin-top:6px;">
-      1. Abre Eleventa → <strong>Inventario → Reporte de Inventario → Exportar</strong><br>
-      2. Guarda el archivo generado aquí en tu computadora<br>
-      3. Ve a <strong>Catálogo → Importar productos</strong><br>
-      4. Selecciona el archivo y mapea las columnas<br>
-      5. Activa "Actualizar inventario" si quieres actualizar cantidades
+      1. Ve a <strong>Catálogo → Importar productos</strong><br>
+      2. Selecciona el archivo descargado<br>
+      3. Mapea las columnas — los nombres ya coinciden<br>
+      4. Activa <strong>"Actualizar inventario"</strong> para actualizar cantidades
     </div>
   </div>
 </div>
@@ -346,12 +386,39 @@
         <div class="field"><label>Departamento</label>
           <select id="e-dept">
             <option value="">Selecciona...</option>
-            <option value="Genérico">Genérico</option>
-            <option value="Patente">Patente</option>
-            <option value="OTC">OTC / Sin receta</option>
-            <option value="Curación">Material de curación</option>
-            <option value="Suplementos">Suplementos</option>
-            <option value="Leche infantil">Leche infantil</option>
+            <option value="Generico Tab N">Genérico Tab</option>
+            <option value="Generico Jbe N">Genérico Jarabe</option>
+            <option value="Patente Tab N">Patente Tab</option>
+            <option value="Patente Jbe N">Patente Jarabe</option>
+            <option value="Jbe-Susp/Patente">Jbe-Susp/Patente</option>
+            <option value="Pastillas/Patente">Pastillas/Patente</option>
+            <option value="Pomadas/Patente">Pomadas/Patente</option>
+            <option value="Gotas/Patente">Gotas/Patente</option>
+            <option value="Ampolletas N">Ampolletas</option>
+            <option value="Ovulo/supositorio">Óvulo/Supositorio</option>
+            <option value="material de curacion">Material de curación</option>
+            <option value="Leches/complementos">Leches/Complementos</option>
+            <option value="Vit/suplementos">Vit/Suplementos</option>
+            <option value="Naturista">Naturista</option>
+            <option value="Electrolitos">Electrolitos</option>
+            <option value="bebe">Bebé</option>
+            <option value="pañal">Pañal</option>
+            <option value="Perf/Baño">Perf/Baño</option>
+            <option value="Perf/toallas">Perf/Toallas</option>
+            <option value="Perfumeria/Cremas">Perfumería/Cremas</option>
+            <option value="Prf/Cabello">Prf/Cabello</option>
+            <option value="Cuidado Cabello">Cuidado Cabello</option>
+            <option value="Prfm/Desodorantes">Desodorantes</option>
+            <option value="higiene dental">Higiene Dental</option>
+            <option value="salud bucal">Salud Bucal</option>
+            <option value="Salud Sexual">Salud Sexual</option>
+            <option value="controlado">Controlado</option>
+            <option value="rebotica">Rebotica</option>
+            <option value="sobres">Sobres</option>
+            <option value="chocolates">Chocolates</option>
+            <option value="agua">Agua</option>
+            <option value="Suelto">Suelto</option>
+            <option value="- Sin Departamento -">Sin Departamento</option>
           </select>
         </div>
       </div>
@@ -400,48 +467,75 @@ function switchTab(tab) {
   if (tab !== 'captura' && scannerRunning) stopScanner();
 }
 
-// ── Scanner ─────────────────────────────────────────────────────────
+// ── Scanner (ZXing — iPhone 14 Pro compatible) ───────────────────────
+let zxingReader = null;
+let zxingControls = null;
+
 function toggleScanner() {
   if (scannerRunning) stopScanner();
   else startScanner();
 }
 
-function startScanner() {
+async function startScanner() {
   document.getElementById('scanner-container').style.display = 'block';
   document.getElementById('scan-btn').classList.add('scanning');
   document.getElementById('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="4.22" y1="4.22" x2="19.78" y2="19.78"/></svg> Detener cámara`;
 
-  Quagga.init({
-    inputStream: {
-      name: 'Live',
-      type: 'LiveStream',
-      target: document.getElementById('scanner-video'),
-      constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    },
-    decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader'] },
-    locate: true
-  }, err => {
-    if (err) { showToast('No se pudo acceder a la cámara', 'error'); stopScanner(); return; }
-    Quagga.start();
-    scannerRunning = true;
-  });
+  try {
+    const video = document.getElementById('scanner-video');
 
-  Quagga.onDetected(result => {
-    const code = result.codeResult.code;
-    if (code === lastScanned) return;
-    lastScanned = code;
-    document.getElementById('f-codigo').value = code;
-    document.getElementById('scan-code-text').textContent = code;
-    document.getElementById('scan-result').style.display = 'flex';
-    showToast('Código: ' + code, 'success');
-    if (navigator.vibrate) navigator.vibrate(60);
+    // Solicitar cámara trasera con autofocus continuo — clave para iPhone 14 Pro
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        focusMode: { ideal: 'continuous' },
+        zoom: { ideal: 1 }
+      }
+    });
+    video.srcObject = stream;
+    await video.play();
+    scannerRunning = true;
+
+    // ZXing MultiFormatReader — soporta EAN-13, EAN-8, Code128, QR, etc.
+    zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
+
+    zxingControls = await zxingReader.decodeFromVideoElement(video, (result, err) => {
+      if (result) {
+        const code = result.getText();
+        if (code === lastScanned) return;
+        lastScanned = code;
+        document.getElementById('f-codigo').value = code;
+        document.getElementById('scan-code-text').textContent = code;
+        document.getElementById('scan-result').style.display = 'flex';
+        showToast('Código: ' + code, 'success');
+        if (navigator.vibrate) navigator.vibrate(60);
+        stopScanner();
+        setTimeout(() => document.getElementById('f-desc').focus(), 300);
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    showToast('No se pudo acceder a la cámara', 'error');
     stopScanner();
-    document.getElementById('f-desc').focus();
-  });
+  }
 }
 
 function stopScanner() {
-  if (scannerRunning) { Quagga.stop(); scannerRunning = false; }
+  // Detener ZXing
+  if (zxingControls) { try { zxingControls.stop(); } catch(e){} zxingControls = null; }
+  if (zxingReader) { try { zxingReader.reset(); } catch(e){} zxingReader = null; }
+
+  // Detener stream de video directamente
+  const video = document.getElementById('scanner-video');
+  if (video && video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+
+  scannerRunning = false;
   document.getElementById('scanner-container').style.display = 'none';
   document.getElementById('scan-btn').classList.remove('scanning');
   document.getElementById('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M16 16h5v5M16 21h0M21 16h0"/></svg> Escanear código de barras`;
@@ -484,7 +578,8 @@ function addProduct() {
     precio_venta: parseFloat(document.getElementById('f-venta').value) || 0,
     precio_mayoreo: parseFloat(document.getElementById('f-mayoreo').value) || 0,
     cantidad_inventario: parseInt(document.getElementById('f-qty').value) || 0,
-    minimo: parseInt(document.getElementById('f-minimo').value) || 5,
+    minimo: parseInt(document.getElementById('f-minimo').value) || 0,
+    maximo: 0,
     departamento: document.getElementById('f-dept').value,
     proveedor: document.getElementById('f-proveedor').value,
   };
@@ -593,11 +688,11 @@ document.getElementById('edit-modal').addEventListener('click', e => {
 
 // ── Stats ────────────────────────────────────────────────────────────
 function updateStats() {
-  const low = products.filter(p => p.cantidad_inventario <= p.minimo).length;
+  const sinMinimo = products.filter(p => p.minimo === 0).length;
   const val = products.reduce((s, p) => s + (p.precio_costo * p.cantidad_inventario), 0);
   document.getElementById('stat-total').textContent = products.length;
-  document.getElementById('stat-low').textContent = low;
-  document.getElementById('stat-val').textContent = '$' + (val >= 1000 ? (val/1000).toFixed(1) + 'k' : val.toFixed(0));
+  document.getElementById('stat-low').textContent = sinMinimo;
+  document.getElementById('stat-val').textContent = '$' + (val >= 1000000 ? (val/1000000).toFixed(1) + 'M' : val >= 1000 ? (val/1000).toFixed(1) + 'k' : val.toFixed(0));
 }
 
 function updateCounters() {
@@ -605,25 +700,95 @@ function updateCounters() {
   document.getElementById('header-count').textContent = n + (n === 1 ? ' producto' : ' productos');
 }
 
+// ── Import from Eleventa Excel ────────────────────────────────────────
+function parsePrice(val) {
+  if (val === null || val === undefined) return 0;
+  return parseFloat(String(val).replace(/[$,\s]/g, '')) || 0;
+}
+
+function importExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (rows.length === 0) { showToast('El archivo está vacío', 'error'); return; }
+
+      // Detectar nombres de columnas flexiblemente
+      const firstRow = rows[0];
+      const keys = Object.keys(firstRow);
+      const findCol = (...candidates) => keys.find(k => candidates.some(c => k.toLowerCase().includes(c.toLowerCase()))) || '';
+
+      const colCodigo  = findCol('código','codigo','code','clave');
+      const colProd    = findCol('producto','descripcion','nombre','name');
+      const colCosto   = findCol('costo','cost');
+      const colVenta   = findCol('venta','sale','precio venta','p. venta');
+      const colMayoreo = findCol('mayoreo','wholesale','p. mayoreo');
+      const colExist   = findCol('existencia','exist','stock','cantidad');
+      const colMin     = findCol('mínimo','minimo','min');
+      const colMax     = findCol('máximo','maximo','max');
+      const colDept    = findCol('departamento','dept','categoria','category');
+
+      let imported = 0, skipped = 0;
+      const newProducts = [];
+
+      rows.forEach(row => {
+        const codigo = String(row[colCodigo] || '').trim();
+        const desc   = String(row[colProd] || '').trim();
+        if (!desc) { skipped++; return; }
+
+        newProducts.push({
+          codigo,
+          descripcion: desc,
+          precio_costo:    parsePrice(row[colCosto]),
+          precio_venta:    parsePrice(row[colVenta]),
+          precio_mayoreo:  parsePrice(row[colMayoreo]),
+          cantidad_inventario: parseFloat(String(row[colExist] || '0').replace(/[$,]/g, '')) || 0,
+          minimo:  parseInt(String(row[colMin] || '0')) || 0,
+          maximo:  parseInt(String(row[colMax] || '0')) || 0,
+          departamento: String(row[colDept] || '').trim(),
+          proveedor: '',
+        });
+        imported++;
+      });
+
+      if (confirm(`Se importarán ${imported} productos. ¿Reemplazar el inventario actual (${products.length} productos)?`)) {
+        products = newProducts;
+        save();
+        updateStats();
+        showToast(`✓ ${imported} productos importados`, 'success');
+      }
+    } catch(err) {
+      console.error(err);
+      showToast('Error al leer el archivo', 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 // ── Export ───────────────────────────────────────────────────────────
 function exportExcel() {
   if (products.length === 0) { showToast('No hay productos para exportar', 'error'); return; }
   const rows = products.map(p => ({
-    'codigo': p.codigo || '',
-    'descripcion': p.descripcion,
-    'precio_costo': p.precio_costo,
-    'precio_venta': p.precio_venta,
-    'precio_mayoreo': p.precio_mayoreo || '',
-    'departamento': p.departamento || '',
-    'proveedor': p.proveedor || '',
-    'cantidad_inventario': p.cantidad_inventario,
-    'minimo': p.minimo
+    'Código':        p.codigo || '',
+    'Producto':      p.descripcion,
+    'P. Costo':      p.precio_costo,
+    'P. Venta':      p.precio_venta,
+    'P. Mayoreo':    p.precio_mayoreo || 0,
+    'Existencia':    p.cantidad_inventario,
+    'Inv. Mínimo':   p.minimo,
+    'Inv. Máximo':   p.maximo || 0,
+    'Departamento':  p.departamento || '',
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [14,36,12,12,14,16,14,18,8].map(w => ({ wch: w }));
+  ws['!cols'] = [16, 40, 10, 10, 12, 10, 10, 10, 20].map(w => ({ wch: w }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
-  const fecha = new Date().toISOString().slice(0,10);
+  const fecha = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(wb, 'inventario_eleventa_' + fecha + '.xlsx');
   showToast('Archivo descargado', 'success');
 }
