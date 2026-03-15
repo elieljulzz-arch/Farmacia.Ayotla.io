@@ -1,0 +1,2 @@
+# Farmacia.Ayotla.io
+Inventario
