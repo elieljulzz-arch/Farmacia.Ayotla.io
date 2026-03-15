@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Inventario — Farmacia</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181b23;
+    --surface2: #1f2330;
+    --border: #2a2f3d;
+    --accent: #4ade80;
+    --accent2: #22d3ee;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --text: #f0f2f7;
+    --muted: #6b7280;
+    --radius: 12px;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; overscroll-behavior: none; }
+
+  /* ── Header ── */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+  .logo-sub { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .header-count { font-family: var(--mono); font-size: 13px; color: var(--accent); background: rgba(74,222,128,0.08); padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(74,222,128,0.2); }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; padding: 12px 8px; font-size: 12px; font-weight: 500; color: var(--muted); text-align: center; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; letter-spacing: 0.03em; text-transform: uppercase; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Panels ── */
+  .panel { display: none; padding: 16px; }
+  .panel.active { display: block; }
+
+  /* ── Scanner view ── */
+  #scanner-box { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; width: 100%; aspect-ratio: 4/3; border: 1px solid var(--border); }
+  #scanner-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .scan-frame { width: 60%; aspect-ratio: 3/1; border: 2px solid var(--accent); border-radius: 6px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); position: relative; }
+  .scan-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); opacity: 0.8; animation: scanline 2s ease-in-out infinite; box-shadow: 0 0 8px var(--accent); }
+  @keyframes scanline { 0%,100% { top: 10%; } 50% { top: 85%; } }
+  .scan-label { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 11px; color: rgba(255,255,255,0.6); font-family: var(--mono); }
+
+  .scan-result { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+  .scan-result-code { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--accent2); flex: 1; }
+  .scan-result-label { font-size: 11px; color: var(--muted); }
+
+  /* ── Form ── */
+  .form-grid { display: grid; gap: 10px; margin-top: 14px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
+  .field input, .field select { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; font-size: 15px; color: var(--text); font-family: var(--sans); outline: none; width: 100%; transition: border-color 0.15s; -webkit-appearance: none; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--muted); }
+  .field select option { background: var(--surface2); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ── Buttons ── */
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; width: 100%; transition: all 0.12s; letter-spacing: -0.01em; }
+  .btn-primary { background: var(--accent); color: #0a1a0f; }
+  .btn-primary:active { transform: scale(0.97); background: #22c55e; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:active { background: var(--border); }
+  .btn-danger { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.25); }
+  .btn-export { background: var(--accent2); color: #061a1d; }
+  .btn-export:active { transform: scale(0.97); }
+  .btn-scan { background: rgba(34,211,238,0.1); color: var(--accent2); border: 1px solid rgba(34,211,238,0.25); margin-bottom: 10px; }
+  .btn-scan.scanning { background: rgba(251,191,36,0.1); color: var(--warn); border-color: rgba(251,191,36,0.3); }
+  .btn-group { display: flex; gap: 8px; margin-top: 14px; }
+  .btn-group .btn { flex: 1; }
+
+  /* ── Lista ── */
+  .list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .list-title { font-size: 13px; color: var(--muted); font-family: var(--mono); }
+  .search-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: var(--text); width: 100%; outline: none; margin-bottom: 12px; }
+  .search-input:focus { border-color: var(--accent2); }
+
+  .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: border-color 0.12s; }
+  .product-card:active { border-color: var(--accent); }
+  .product-card-left { flex: 1; min-width: 0; }
+  .product-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .product-code { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .product-meta { display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; }
+  .tag { font-size: 10px; font-family: var(--mono); padding: 2px 7px; border-radius: 99px; }
+  .tag-qty { background: rgba(74,222,128,0.1); color: var(--accent); border: 1px solid rgba(74,222,128,0.2); }
+  .tag-qty.low { background: rgba(251,191,36,0.1); color: var(--warn); border-color: rgba(251,191,36,0.2); }
+  .tag-cost { background: rgba(34,211,238,0.08); color: var(--accent2); border: 1px solid rgba(34,211,238,0.2); }
+  .tag-dept { background: rgba(107,114,128,0.15); color: var(--muted); border: 1px solid var(--border); }
+  .del-btn { width: 32px; height: 32px; border-radius: 8px; background: transparent; border: none; color: var(--muted); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .del-btn:active { color: var(--danger); background: rgba(248,113,113,0.1); }
+
+  /* ── Empty state ── */
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+  .empty p { font-size: 13px; line-height: 1.6; }
+
+  /* ── Export panel ── */
+  .export-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .export-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .export-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+  .stat { background: var(--surface2); border-radius: 10px; padding: 12px 10px; text-align: center; }
+  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--accent); }
+  .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ── Toast ── */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 13px; font-weight: 500; z-index: 9999; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); white-space: nowrap; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: rgba(74,222,128,0.4); color: var(--accent); }
+  .toast.error { border-color: rgba(248,113,113,0.4); color: var(--danger); }
+
+  /* ── Modal ── */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: flex-end; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 16px 32px; width: 100%; max-height: 80vh; overflow-y: auto; }
+  .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+  .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+  /* ── Numeric input helpers ── */
+  .num-row { display: flex; align-items: center; gap: 0; }
+  .num-row input { text-align: center; border-radius: 0; border-left: none; border-right: none; flex: 1; }
+  .num-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .num-btn:first-child { border-radius: 8px 0 0 8px; }
+  .num-btn:last-child { border-radius: 0 8px 8px 0; }
+  .num-btn:active { background: var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div>
+      <div class="logo-text">Inventario</div>
+      <div class="logo-sub">→ Eleventa</div>
+    </div>
+  </div>
+  <div class="header-count" id="header-count">0 productos</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('captura')">Captura</div>
+  <div class="tab" onclick="switchTab('lista')">Lista</div>
+  <div class="tab" onclick="switchTab('exportar')">Exportar</div>
+</div>
+
+<!-- ═══ TAB CAPTURA ═══ -->
+<div id="panel-captura" class="panel active">
+
+  <button class="btn btn-scan" id="scan-btn" onclick="toggleScanner()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M16 16h5v5M16 21h0M21 16h0"/></svg>
+    Escanear código de barras
+  </button>
+
+  <div id="scanner-container" style="display:none;">
+    <div id="scanner-box">
+      <div id="scanner-video"></div>
+      <div class="scan-overlay">
+        <div class="scan-frame">
+          <div class="scan-line"></div>
+        </div>
+      </div>
+      <div class="scan-label">Centra el código de barras</div>
+    </div>
+    <div class="scan-result" id="scan-result" style="display:none;">
+      <div>
+        <div class="scan-result-label">Código detectado</div>
+        <div class="scan-result-code" id="scan-code-text">—</div>
+      </div>
+      <button class="btn btn-secondary" style="width:auto;padding:8px 12px;font-size:12px;" onclick="clearScan()">Limpiar</button>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div class="field">
+      <label>Código / Barras</label>
+      <input type="text" id="f-codigo" placeholder="Escribe o escanea" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label>Descripción del producto</label>
+      <input type="text" id="f-desc" placeholder="Ej: Paracetamol 500mg c/20" autocomplete="off">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Precio costo $</label>
+        <input type="number" id="f-costo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+      </div>
+      <div class="field">
+        <label>Precio venta $</label>
+        <input type="number" id="f-venta" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Precio mayoreo $</label>
+        <input type="number" id="f-mayoreo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+      </div>
+      <div class="field">
+        <label>Cantidad en inventario</label>
+        <div class="num-row">
+          <button class="num-btn" onclick="adjustQty(-1)">−</button>
+          <input type="number" id="f-qty" placeholder="0" inputmode="numeric" min="0" value="0" style="border-radius:0;">
+          <button class="num-btn" onclick="adjustQty(1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Mínimo inventario</label>
+        <input type="number" id="f-minimo" placeholder="5" inputmode="numeric" min="0">
+      </div>
+      <div class="field">
+        <label>Departamento</label>
+        <select id="f-dept">
+          <option value="">Selecciona...</option>
+          <option value="Genérico">Genérico</option>
+          <option value="Patente">Patente</option>
+          <option value="OTC">OTC / Sin receta</option>
+          <option value="Curación">Material de curación</option>
+          <option value="Suplementos">Suplementos</option>
+          <option value="Leche infantil">Leche infantil</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Proveedor</label>
+      <select id="f-proveedor">
+        <option value="">Selecciona...</option>
+        <option value="NADRO">NADRO</option>
+        <option value="Levic/Reder">Levic / Reder</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn btn-secondary" onclick="clearForm()">Limpiar</button>
+    <button class="btn btn-primary" onclick="addProduct()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      Agregar
+    </button>
+  </div>
+</div>
+
+<!-- ═══ TAB LISTA ═══ -->
+<div id="panel-lista" class="panel">
+  <input class="search-input" id="search-input" placeholder="Buscar por nombre o código..." oninput="renderList()">
+  <div class="list-header">
+    <span class="list-title" id="list-count-label">0 productos</span>
+    <button class="btn btn-danger" style="width:auto;padding:7px 12px;font-size:12px;" onclick="confirmClearAll()">Limpiar todo</button>
+  </div>
+  <div id="product-list"></div>
+</div>
+
+<!-- ═══ TAB EXPORTAR ═══ -->
+<div id="panel-exportar" class="panel">
+  <div class="export-card">
+    <div class="export-title">Exportar para Eleventa</div>
+    <div class="export-desc">Genera un archivo Excel (.xlsx) listo para importar desde <strong>Inventario → Importar productos</strong> en Eleventa. Las columnas corresponden exactamente al formato requerido.</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="stat-val" id="stat-total">0</div>
+      <div class="stat-lbl">Productos</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="stat-low">0</div>
+      <div class="stat-lbl">Stock bajo</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="stat-val">$0</div>
+      <div class="stat-lbl">Valor costo</div>
+    </div>
+  </div>
+
+  <div class="export-card" style="margin-top:0;">
+    <div class="export-title" style="font-size:12px;color:var(--muted);margin-bottom:8px;">Columnas que se exportan</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">codigo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">descripcion</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">precio_costo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">precio_venta</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">precio_mayoreo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">departamento</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">proveedor</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">cantidad_inventario</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">minimo</span>
+    </div>
+  </div>
+
+  <button class="btn btn-export" onclick="exportExcel()" style="margin-top:4px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    Descargar inventario.xlsx
+  </button>
+
+  <div class="divider"></div>
+  <div class="export-card">
+    <div class="export-title" style="font-size:12px;">Cómo importar en Eleventa</div>
+    <div class="export-desc" style="margin-top:6px;">
+      1. Abre Eleventa → <strong>Inventario → Reporte de Inventario → Exportar</strong><br>
+      2. Guarda el archivo generado aquí en tu computadora<br>
+      3. Ve a <strong>Catálogo → Importar productos</strong><br>
+      4. Selecciona el archivo y mapea las columnas<br>
+      5. Activa "Actualizar inventario" si quieres actualizar cantidades
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL EDITAR ═══ -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Editar producto</div>
+    <div class="form-grid" id="edit-form-grid">
+      <div class="field"><label>Código</label><input type="text" id="e-codigo" inputmode="numeric"></div>
+      <div class="field"><label>Descripción</label><input type="text" id="e-desc"></div>
+      <div class="row2">
+        <div class="field"><label>Precio costo $</label><input type="number" id="e-costo" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label>Precio venta $</label><input type="number" id="e-venta" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Mayoreo $</label><input type="number" id="e-mayoreo" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label>Cantidad</label>
+          <div class="num-row">
+            <button class="num-btn" onclick="adjustEditQty(-1)">−</button>
+            <input type="number" id="e-qty" inputmode="numeric" min="0">
+            <button class="num-btn" onclick="adjustEditQty(1)">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Mínimo</label><input type="number" id="e-minimo" inputmode="numeric"></div>
+        <div class="field"><label>Departamento</label>
+          <select id="e-dept">
+            <option value="">Selecciona...</option>
+            <option value="Genérico">Genérico</option>
+            <option value="Patente">Patente</option>
+            <option value="OTC">OTC / Sin receta</option>
+            <option value="Curación">Material de curación</option>
+            <option value="Suplementos">Suplementos</option>
+            <option value="Leche infantil">Leche infantil</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Proveedor</label>
+        <select id="e-proveedor">
+          <option value="">Selecciona...</option>
+          <option value="NADRO">NADRO</option>
+          <option value="Levic/Reder">Levic / Reder</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let products = JSON.parse(localStorage.getItem('inv_products') || '[]');
+let editIndex = -1;
+let scannerRunning = false;
+let lastScanned = '';
+
+// ── Persistence ────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('inv_products', JSON.stringify(products));
+  updateCounters();
+}
+
+// ── Tabs ────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['captura','lista','exportar'];
+    t.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'lista') renderList();
+  if (tab === 'exportar') updateStats();
+  if (tab !== 'captura' && scannerRunning) stopScanner();
+}
+
+// ── Scanner ─────────────────────────────────────────────────────────
+function toggleScanner() {
+  if (scannerRunning) stopScanner();
+  else startScanner();
+}
+
+function startScanner() {
+  document.getElementById('scanner-container').style.display = 'block';
+  document.getElementById('scan-btn').classList.add('scanning');
+  document.getElementById('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="4.22" y1="4.22" x2="19.78" y2="19.78"/></svg> Detener cámara`;
+
+  Quagga.init({
+    inputStream: {
+      name: 'Live',
+      type: 'LiveStream',
+      target: document.getElementById('scanner-video'),
+      constraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    },
+    decoder: { readers: ['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader'] },
+    locate: true
+  }, err => {
+    if (err) { showToast('No se pudo acceder a la cámara', 'error'); stopScanner(); return; }
+    Quagga.start();
+    scannerRunning = true;
+  });
+
+  Quagga.onDetected(result => {
+    const code = result.codeResult.code;
+    if (code === lastScanned) return;
+    lastScanned = code;
+    document.getElementById('f-codigo').value = code;
+    document.getElementById('scan-code-text').textContent = code;
+    document.getElementById('scan-result').style.display = 'flex';
+    showToast('Código: ' + code, 'success');
+    if (navigator.vibrate) navigator.vibrate(60);
+    stopScanner();
+    document.getElementById('f-desc').focus();
+  });
+}
+
+function stopScanner() {
+  if (scannerRunning) { Quagga.stop(); scannerRunning = false; }
+  document.getElementById('scanner-container').style.display = 'none';
+  document.getElementById('scan-btn').classList.remove('scanning');
+  document.getElementById('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M16 16h5v5M16 21h0M21 16h0"/></svg> Escanear código de barras`;
+}
+
+function clearScan() {
+  lastScanned = '';
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('f-codigo').value = '';
+}
+
+// ── Form helpers ────────────────────────────────────────────────────
+function adjustQty(d) {
+  const inp = document.getElementById('f-qty');
+  inp.value = Math.max(0, (parseInt(inp.value) || 0) + d);
+}
+function adjustEditQty(d) {
+  const inp = document.getElementById('e-qty');
+  inp.value = Math.max(0, (parseInt(inp.value) || 0) + d);
+}
+function clearForm() {
+  ['f-codigo','f-desc','f-costo','f-venta','f-mayoreo','f-qty','f-minimo'].forEach(id => {
+    document.getElementById(id).value = id === 'f-qty' ? '0' : '';
+  });
+  document.getElementById('f-dept').value = '';
+  document.getElementById('f-proveedor').value = '';
+  lastScanned = '';
+  document.getElementById('scan-result').style.display = 'none';
+}
+
+// ── Add product ─────────────────────────────────────────────────────
+function addProduct() {
+  const desc = document.getElementById('f-desc').value.trim();
+  if (!desc) { showToast('Escribe la descripción del producto', 'error'); document.getElementById('f-desc').focus(); return; }
+  const codigo = document.getElementById('f-codigo').value.trim();
+  const p = {
+    codigo,
+    descripcion: desc,
+    precio_costo: parseFloat(document.getElementById('f-costo').value) || 0,
+    precio_venta: parseFloat(document.getElementById('f-venta').value) || 0,
+    precio_mayoreo: parseFloat(document.getElementById('f-mayoreo').value) || 0,
+    cantidad_inventario: parseInt(document.getElementById('f-qty').value) || 0,
+    minimo: parseInt(document.getElementById('f-minimo').value) || 5,
+    departamento: document.getElementById('f-dept').value,
+    proveedor: document.getElementById('f-proveedor').value,
+  };
+  if (codigo && products.some((x,i) => x.codigo === codigo)) {
+    showToast('Código duplicado — actualiza en Lista', 'error'); return;
+  }
+  products.unshift(p);
+  save();
+  showToast('✓ ' + desc.substring(0,30), 'success');
+  clearForm();
+}
+
+// ── List ─────────────────────────────────────────────────────────────
+function renderList() {
+  const q = (document.getElementById('search-input').value || '').toLowerCase();
+  const filtered = products.filter(p =>
+    p.descripcion.toLowerCase().includes(q) ||
+    (p.codigo || '').toLowerCase().includes(q)
+  );
+  const el = document.getElementById('product-list');
+  document.getElementById('list-count-label').textContent = filtered.length + ' producto' + (filtered.length !== 1 ? 's' : '');
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">○</div><p>${products.length === 0 ? 'No hay productos aún.<br>Empieza capturando en la pestaña <strong>Captura</strong>.' : 'Sin resultados para "' + q + '"'}</p></div>`;
+    return;
+  }
+  el.innerHTML = filtered.map((p, i) => {
+    const realIdx = products.indexOf(p);
+    const isLow = p.cantidad_inventario <= p.minimo;
+    return `<div class="product-card" onclick="openEdit(${realIdx})">
+      <div class="product-card-left">
+        <div class="product-name">${p.descripcion}</div>
+        <div class="product-code">${p.codigo || '—'}</div>
+        <div class="product-meta">
+          <span class="tag ${isLow ? 'tag-qty low' : 'tag-qty'}">${p.cantidad_inventario} uds${isLow ? ' ⚠' : ''}</span>
+          <span class="tag tag-cost">$${p.precio_venta.toFixed(2)}</span>
+          ${p.departamento ? `<span class="tag tag-dept">${p.departamento}</span>` : ''}
+        </div>
+      </div>
+      <button class="del-btn" onclick="event.stopPropagation();deleteProduct(${realIdx})">×</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteProduct(idx) {
+  if (confirm('¿Eliminar "' + products[idx].descripcion + '"?')) {
+    products.splice(idx, 1);
+    save();
+    renderList();
+    showToast('Producto eliminado', 'error');
+  }
+}
+
+function confirmClearAll() {
+  if (products.length === 0) { showToast('No hay productos', 'error'); return; }
+  if (confirm('¿Eliminar TODOS los ' + products.length + ' productos? Esta acción no se puede deshacer.')) {
+    products = [];
+    save();
+    renderList();
+    showToast('Lista vaciada', 'error');
+  }
+}
+
+// ── Edit modal ───────────────────────────────────────────────────────
+function openEdit(idx) {
+  editIndex = idx;
+  const p = products[idx];
+  document.getElementById('e-codigo').value = p.codigo || '';
+  document.getElementById('e-desc').value = p.descripcion;
+  document.getElementById('e-costo').value = p.precio_costo;
+  document.getElementById('e-venta').value = p.precio_venta;
+  document.getElementById('e-mayoreo').value = p.precio_mayoreo || '';
+  document.getElementById('e-qty').value = p.cantidad_inventario;
+  document.getElementById('e-minimo').value = p.minimo;
+  document.getElementById('e-dept').value = p.departamento || '';
+  document.getElementById('e-proveedor').value = p.proveedor || '';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+  editIndex = -1;
+}
+
+function saveEdit() {
+  if (editIndex < 0) return;
+  products[editIndex] = {
+    codigo: document.getElementById('e-codigo').value.trim(),
+    descripcion: document.getElementById('e-desc').value.trim(),
+    precio_costo: parseFloat(document.getElementById('e-costo').value) || 0,
+    precio_venta: parseFloat(document.getElementById('e-venta').value) || 0,
+    precio_mayoreo: parseFloat(document.getElementById('e-mayoreo').value) || 0,
+    cantidad_inventario: parseInt(document.getElementById('e-qty').value) || 0,
+    minimo: parseInt(document.getElementById('e-minimo').value) || 5,
+    departamento: document.getElementById('e-dept').value,
+    proveedor: document.getElementById('e-proveedor').value,
+  };
+  save();
+  closeModal();
+  renderList();
+  showToast('Producto actualizado', 'success');
+}
+
+document.getElementById('edit-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-modal')) closeModal();
+});
+
+// ── Stats ────────────────────────────────────────────────────────────
+function updateStats() {
+  const low = products.filter(p => p.cantidad_inventario <= p.minimo).length;
+  const val = products.reduce((s, p) => s + (p.precio_costo * p.cantidad_inventario), 0);
+  document.getElementById('stat-total').textContent = products.length;
+  document.getElementById('stat-low').textContent = low;
+  document.getElementById('stat-val').textContent = '$' + (val >= 1000 ? (val/1000).toFixed(1) + 'k' : val.toFixed(0));
+}
+
+function updateCounters() {
+  const n = products.length;
+  document.getElementById('header-count').textContent = n + (n === 1 ? ' producto' : ' productos');
+}
+
+// ── Export ───────────────────────────────────────────────────────────
+function exportExcel() {
+  if (products.length === 0) { showToast('No hay productos para exportar', 'error'); return; }
+  const rows = products.map(p => ({
+    'codigo': p.codigo || '',
+    'descripcion': p.descripcion,
+    'precio_costo': p.precio_costo,
+    'precio_venta': p.precio_venta,
+    'precio_mayoreo': p.precio_mayoreo || '',
+    'departamento': p.departamento || '',
+    'proveedor': p.proveedor || '',
+    'cantidad_inventario': p.cantidad_inventario,
+    'minimo': p.minimo
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [14,36,12,12,14,16,14,18,8].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+  const fecha = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'inventario_eleventa_' + fecha + '.xlsx');
+  showToast('Archivo descargado', 'success');
+}
+
+// ── Toast ────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+updateCounters();
+</script>
+</body>
+</html>
