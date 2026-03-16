@@ -75,6 +75,14 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .btn-group{display:flex;gap:8px;margin-top:14px}
 .btn-group .btn{flex:1}
 
+/* Voice */
+.field-voice{display:flex;gap:8px;align-items:flex-end}
+.field-voice .field{flex:1}
+.mic-btn{width:44px;height:44px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.mic-btn:active{transform:scale(.93)}
+.mic-btn.listening{background:rgba(248,113,113,.15);border-color:rgba(248,113,113,.4);color:var(--danger);animation:mic-pulse 1s ease-in-out infinite}
+@keyframes mic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.3)}50%{box-shadow:0 0 0 6px rgba(248,113,113,0)}}
+
 /* Num row */
 .num-row{display:flex;align-items:center}
 .num-row input{text-align:center;border-radius:0;border-left:none;border-right:none;flex:1}
@@ -190,24 +198,44 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
       <label>Código / Barras</label>
       <input type="text" id="f-codigo" placeholder="Escanea o escribe el código" inputmode="numeric">
     </div>
-    <div class="field">
-      <label>Producto</label>
-      <input type="text" id="f-desc" placeholder="Ej: Paracetamol 500mg c/20" autocomplete="off">
+    <div class="field-voice">
+      <div class="field">
+        <label>Producto</label>
+        <input type="text" id="f-desc" placeholder="Ej: Paracetamol 500mg c/20" autocomplete="off">
+      </div>
+      <button class="mic-btn" id="mic-desc" onclick="toggleVoice('f-desc','mic-desc','text')" title="Dictar nombre">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3M9 22h6"/></svg>
+      </button>
     </div>
     <div class="row2">
-      <div class="field">
-        <label>P. Costo $</label>
-        <input type="number" id="f-costo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+      <div class="field-voice">
+        <div class="field">
+          <label>P. Costo $</label>
+          <input type="number" id="f-costo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+        </div>
+        <button class="mic-btn" id="mic-costo" onclick="toggleVoice('f-costo','mic-costo','number')" title="Dictar precio">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3M9 22h6"/></svg>
+        </button>
       </div>
-      <div class="field">
-        <label>P. Venta $</label>
-        <input type="number" id="f-venta" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+      <div class="field-voice">
+        <div class="field">
+          <label>P. Venta $</label>
+          <input type="number" id="f-venta" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+        </div>
+        <button class="mic-btn" id="mic-venta" onclick="toggleVoice('f-venta','mic-venta','number')" title="Dictar precio">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3M9 22h6"/></svg>
+        </button>
       </div>
     </div>
     <div class="row2">
-      <div class="field">
-        <label>P. Mayoreo $</label>
-        <input type="number" id="f-mayoreo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+      <div class="field-voice">
+        <div class="field">
+          <label>P. Mayoreo $</label>
+          <input type="number" id="f-mayoreo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+        </div>
+        <button class="mic-btn" id="mic-mayoreo" onclick="toggleVoice('f-mayoreo','mic-mayoreo','number')" title="Dictar precio">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3M9 22h6"/></svg>
+        </button>
       </div>
       <div class="field">
         <label>Existencia</label>
@@ -802,7 +830,143 @@ function exportExcel() {
   toast('Archivo descargado','ok');
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────
+// ── Voz (Web Speech API — Safari iOS 26 compatible) ──────────────────
+let voiceRecog    = null;
+let voiceActive   = null; // { inputId, btnId, mode }
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function toggleVoice(inputId, btnId, mode) {
+  if (!SpeechRecognition) {
+    toast('Dictado no disponible en este navegador','err');
+    return;
+  }
+  // Si ya está escuchando este campo, detener
+  if (voiceActive && voiceActive.btnId === btnId) {
+    stopVoice();
+    return;
+  }
+  // Si estaba escuchando otro campo, detener primero
+  if (voiceActive) stopVoice();
+
+  startVoice(inputId, btnId, mode);
+}
+
+function startVoice(inputId, btnId, mode) {
+  voiceRecog = new SpeechRecognition();
+  voiceRecog.lang = 'es-MX';
+  voiceRecog.continuous = false;
+  voiceRecog.interimResults = true;
+  voiceRecog.maxAlternatives = 1;
+
+  const btn = $(btnId);
+  const inp = $(inputId);
+  btn.classList.add('listening');
+  voiceActive = { inputId, btnId, mode };
+
+  // Mostrar texto provisional mientras escucha
+  voiceRecog.onresult = e => {
+    let interim = '';
+    let final   = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    const raw = (final || interim).trim();
+    if (mode === 'number') {
+      // Convertir palabras a número: "setenta y ocho punto ochenta y dos" → 78.82
+      inp.value = speechToNumber(raw);
+    } else {
+      inp.value = raw;
+    }
+  };
+
+  voiceRecog.onerror = e => {
+    const msg = e.error === 'not-allowed'  ? 'Permiso de micrófono denegado' :
+                e.error === 'no-speech'    ? 'No se detectó voz — intenta de nuevo' :
+                e.error === 'network'      ? 'Se requiere conexión a internet para dictado' :
+                'Error de voz: ' + e.error;
+    toast(msg, 'err');
+    stopVoice();
+  };
+
+  voiceRecog.onend = () => stopVoice();
+
+  try {
+    voiceRecog.start();
+  } catch(e) {
+    toast('Error al iniciar dictado','err');
+    stopVoice();
+  }
+}
+
+function stopVoice() {
+  if (voiceRecog) { try { voiceRecog.stop(); } catch(e){} voiceRecog = null; }
+  if (voiceActive) {
+    const btn = $(voiceActive.btnId);
+    if (btn) btn.classList.remove('listening');
+    voiceActive = null;
+  }
+}
+
+// Convierte texto hablado de número en español a valor numérico
+function speechToNumber(text) {
+  // Primero intentar si ya es un número directo (ej: "78.82", "setenta y ocho")
+  const direct = parseFloat(text.replace(',', '.'));
+  if (!isNaN(direct)) return direct.toFixed(2);
+
+  const t = text.toLowerCase().trim()
+    .replace(/\bpunto\b/g, '.')
+    .replace(/\bcoma\b/g, '.')
+    .replace(/\bpesos?\b/g, '')
+    .replace(/\bcon\b/g, '.');
+
+  const nums = {
+    'cero':0,'uno':1,'una':1,'dos':2,'tres':3,'cuatro':4,'cinco':5,
+    'seis':6,'siete':7,'ocho':8,'nueve':9,'diez':10,'once':11,
+    'doce':12,'trece':13,'catorce':14,'quince':15,'dieciséis':16,
+    'diecisiete':17,'dieciocho':18,'diecinueve':19,'veinte':20,
+    'veintiuno':21,'veintidós':22,'veintitrés':23,'veinticuatro':24,
+    'veinticinco':25,'veintiséis':26,'veintisiete':27,'veintiocho':28,'veintinueve':29,
+    'treinta':30,'cuarenta':40,'cincuenta':50,'sesenta':60,'setenta':70,
+    'ochenta':80,'noventa':90,'cien':100,'ciento':100,'doscientos':200,
+    'trescientos':300,'cuatrocientos':400,'quinientos':500,'seiscientos':600,
+    'setecientos':700,'ochocientos':800,'novecientos':900,'mil':1000
+  };
+
+  // Reemplazar palabras por números
+  let expr = t;
+  Object.entries(nums).sort((a,b)=>b[0].length-a[0].length).forEach(([w,v])=>{
+    expr = expr.replace(new RegExp('\\b'+w+'\\b','g'), ' '+v+' ');
+  });
+  expr = expr.replace(/\by\b/g, '+').replace(/\s+/g,' ').trim();
+
+  // Evaluar expresión simple
+  try {
+    const parts = expr.split('.');
+    if (parts.length >= 2) {
+      const intPart  = evalSimple(parts[0]);
+      const decPart  = parts[1].trim();
+      const dec      = isNaN(decPart) ? evalSimple(decPart) : parseInt(decPart);
+      const result   = intPart + dec/Math.pow(10, String(dec).length);
+      return isNaN(result) ? '' : result.toFixed(2);
+    }
+    const r = evalSimple(expr);
+    return isNaN(r) ? '' : r.toFixed(2);
+  } catch(e) { return ''; }
+}
+
+function evalSimple(expr) {
+  // Solo suma y multiplicación simples, sin eval()
+  const tokens = String(expr).split('+').map(t=>t.trim()).filter(Boolean);
+  return tokens.reduce((s,t)=>{
+    const n = parseFloat(t);
+    return s + (isNaN(n) ? 0 : n);
+  }, 0);
+}
+
+
 let _tt;
 function toast(msg, type='ok') {
   const t=$('toast'); t.textContent=msg; t.className='toast '+type; t.classList.add('show');
