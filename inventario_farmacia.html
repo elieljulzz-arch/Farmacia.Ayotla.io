@@ -3,150 +3,154 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Inventario — Farmacia</title>
+<title>Inventario — Farmacia Ayotla</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- ZBar WASM + polyfill BarcodeDetector para iOS/Safari -->
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.9.15/dist/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/index.js"></script>
 <style>
-  :root {
-    --bg: #0f1117;
-    --surface: #181b23;
-    --surface2: #1f2330;
-    --border: #2a2f3d;
-    --accent: #4ade80;
-    --accent2: #22d3ee;
-    --warn: #fbbf24;
-    --danger: #f87171;
-    --text: #f0f2f7;
-    --muted: #6b7280;
-    --radius: 12px;
-    --mono: 'DM Mono', monospace;
-    --sans: 'DM Sans', sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; overscroll-behavior: none; }
+:root {
+  --bg:#0f1117; --surface:#181b23; --surface2:#1f2330; --border:#2a2f3d;
+  --accent:#4ade80; --accent2:#22d3ee; --warn:#fbbf24; --danger:#f87171;
+  --text:#f0f2f7; --muted:#6b7280; --radius:12px;
+  --mono:'DM Mono',monospace; --sans:'DM Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;overscroll-behavior:none}
 
-  /* ── Header ── */
-  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
-  .logo { display: flex; align-items: center; gap: 10px; }
-  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  .logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
-  .logo-sub { font-size: 11px; color: var(--muted); font-family: var(--mono); }
-  .header-count { font-family: var(--mono); font-size: 13px; color: var(--accent); background: rgba(74,222,128,0.08); padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(74,222,128,0.2); }
+/* Header */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.logo-text{font-size:15px;font-weight:600;letter-spacing:-0.02em}
+.logo-sub{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.hcount{font-family:var(--mono);font-size:13px;color:var(--accent);background:rgba(74,222,128,.08);padding:4px 10px;border-radius:99px;border:1px solid rgba(74,222,128,.2)}
 
-  /* ── Tabs ── */
-  .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); }
-  .tab { flex: 1; padding: 12px 8px; font-size: 12px; font-weight: 500; color: var(--muted); text-align: center; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; letter-spacing: 0.03em; text-transform: uppercase; }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* Tabs */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border)}
+.tab{flex:1;padding:12px 8px;font-size:12px;font-weight:500;color:var(--muted);text-align:center;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;letter-spacing:.03em;text-transform:uppercase}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 
-  /* ── Panels ── */
-  .panel { display: none; padding: 16px; }
-  .panel.active { display: block; }
+/* Panels */
+.panel{display:none;padding:16px}
+.panel.active{display:block}
 
-  /* ── Scanner view ── */
-  #scanner-box { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; width: 100%; aspect-ratio: 4/3; border: 1px solid var(--border); }
-  #scanner-video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-  .scan-frame { width: 60%; aspect-ratio: 3/1; border: 2px solid var(--accent); border-radius: 6px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); position: relative; }
-  .scan-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); opacity: 0.8; animation: scanline 2s ease-in-out infinite; box-shadow: 0 0 8px var(--accent); }
-  @keyframes scanline { 0%,100% { top: 10%; } 50% { top: 85%; } }
-  .scan-label { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 11px; color: rgba(255,255,255,0.6); font-family: var(--mono); }
+/* Scanner */
+#scanner-wrap{display:none;margin-bottom:12px}
+#scanner-box{position:relative;background:#000;border-radius:var(--radius);overflow:hidden;width:100%;aspect-ratio:4/3;border:1px solid var(--border)}
+#scanner-video{width:100%;height:100%;object-fit:cover;display:block}
+#scanner-canvas{display:none}
+.scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.scan-frame{width:65%;aspect-ratio:3/1;border:2px solid var(--accent);border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);position:relative}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:var(--accent);opacity:.8;animation:scanline 2s ease-in-out infinite;box-shadow:0 0 8px var(--accent)}
+@keyframes scanline{0%,100%{top:10%}50%{top:85%}}
+.scan-label{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:11px;color:rgba(255,255,255,.6);font-family:var(--mono);padding:0 8px}
+.scan-result{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-top:10px;display:none;align-items:center;gap:10px}
+.scan-code{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--accent2);flex:1}
+.scan-lbl{font-size:11px;color:var(--muted)}
 
-  .scan-result { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; display: flex; align-items: center; gap: 10px; }
-  .scan-result-code { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--accent2); flex: 1; }
-  .scan-result-label { font-size: 11px; color: var(--muted); }
+/* Form */
+.form-grid{display:grid;gap:10px;margin-top:14px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em}
+.field input,.field select{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:15px;color:var(--text);font-family:var(--sans);outline:none;width:100%;transition:border-color .15s;-webkit-appearance:none}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field input::placeholder{color:var(--muted)}
+.field select option{background:var(--surface2)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
-  /* ── Form ── */
-  .form-grid { display: grid; gap: 10px; margin-top: 14px; }
-  .field { display: flex; flex-direction: column; gap: 5px; }
-  .field label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
-  .field input, .field select { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; font-size: 15px; color: var(--text); font-family: var(--sans); outline: none; width: 100%; transition: border-color 0.15s; -webkit-appearance: none; }
-  .field input:focus, .field select:focus { border-color: var(--accent); }
-  .field input::placeholder { color: var(--muted); }
-  .field select option { background: var(--surface2); }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Buttons */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 18px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;border:none;width:100%;transition:all .12s;letter-spacing:-.01em;font-family:var(--sans)}
+.btn-primary{background:var(--accent);color:#0a1a0f}
+.btn-primary:active{transform:scale(.97);background:#22c55e}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:active{background:var(--border)}
+.btn-danger{background:rgba(248,113,113,.12);color:var(--danger);border:1px solid rgba(248,113,113,.25)}
+.btn-export{background:var(--accent2);color:#061a1d}
+.btn-export:active{transform:scale(.97)}
+.btn-scan{background:rgba(34,211,238,.1);color:var(--accent2);border:1px solid rgba(34,211,238,.25);margin-bottom:10px}
+.btn-scan.active{background:rgba(251,191,36,.1);color:var(--warn);border-color:rgba(251,191,36,.3)}
+.btn-import{background:rgba(74,222,128,.1);color:var(--accent);border:1px solid rgba(74,222,128,.25)}
+.btn-group{display:flex;gap:8px;margin-top:14px}
+.btn-group .btn{flex:1}
 
-  /* ── Buttons ── */
-  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; width: 100%; transition: all 0.12s; letter-spacing: -0.01em; }
-  .btn-primary { background: var(--accent); color: #0a1a0f; }
-  .btn-primary:active { transform: scale(0.97); background: #22c55e; }
-  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .btn-secondary:active { background: var(--border); }
-  .btn-danger { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.25); }
-  .btn-export { background: var(--accent2); color: #061a1d; }
-  .btn-export:active { transform: scale(0.97); }
-  .btn-scan { background: rgba(34,211,238,0.1); color: var(--accent2); border: 1px solid rgba(34,211,238,0.25); margin-bottom: 10px; }
-  .btn-scan.scanning { background: rgba(251,191,36,0.1); color: var(--warn); border-color: rgba(251,191,36,0.3); }
-  .btn-group { display: flex; gap: 8px; margin-top: 14px; }
-  .btn-group .btn { flex: 1; }
+/* Num row */
+.num-row{display:flex;align-items:center}
+.num-row input{text-align:center;border-radius:0;border-left:none;border-right:none;flex:1}
+.num-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);width:44px;height:44px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--sans)}
+.num-btn:first-child{border-radius:8px 0 0 8px}
+.num-btn:last-child{border-radius:0 8px 8px 0}
+.num-btn:active{background:var(--border)}
 
-  /* ── Lista ── */
-  .list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .list-title { font-size: 13px; color: var(--muted); font-family: var(--mono); }
-  .search-input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: var(--text); width: 100%; outline: none; margin-bottom: 12px; }
-  .search-input:focus { border-color: var(--accent2); }
+/* List */
+.list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.list-title{font-size:13px;color:var(--muted);font-family:var(--mono)}
+.search-input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;color:var(--text);width:100%;outline:none;margin-bottom:12px;font-family:var(--sans)}
+.search-input:focus{border-color:var(--accent2)}
+.pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .12s}
+.pcard:active{border-color:var(--accent)}
+.pcard-left{flex:1;min-width:0}
+.pname{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcode{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+.pmeta{display:flex;gap:8px;margin-top:5px;flex-wrap:wrap}
+.tag{font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:99px}
+.tag-qty{background:rgba(74,222,128,.1);color:var(--accent);border:1px solid rgba(74,222,128,.2)}
+.tag-qty.low{background:rgba(251,191,36,.1);color:var(--warn);border-color:rgba(251,191,36,.2)}
+.tag-cost{background:rgba(34,211,238,.08);color:var(--accent2);border:1px solid rgba(34,211,238,.2)}
+.tag-dept{background:rgba(107,114,128,.15);color:var(--muted);border:1px solid var(--border)}
+.del-btn{width:32px;height:32px;border-radius:8px;background:transparent;border:none;color:var(--muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.del-btn:active{color:var(--danger);background:rgba(248,113,113,.1)}
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-icon{font-size:36px;margin-bottom:12px;opacity:.3}
 
-  .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: border-color 0.12s; }
-  .product-card:active { border-color: var(--accent); }
-  .product-card-left { flex: 1; min-width: 0; }
-  .product-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .product-code { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .product-meta { display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; }
-  .tag { font-size: 10px; font-family: var(--mono); padding: 2px 7px; border-radius: 99px; }
-  .tag-qty { background: rgba(74,222,128,0.1); color: var(--accent); border: 1px solid rgba(74,222,128,0.2); }
-  .tag-qty.low { background: rgba(251,191,36,0.1); color: var(--warn); border-color: rgba(251,191,36,0.2); }
-  .tag-cost { background: rgba(34,211,238,0.08); color: var(--accent2); border: 1px solid rgba(34,211,238,0.2); }
-  .tag-dept { background: rgba(107,114,128,0.15); color: var(--muted); border: 1px solid var(--border); }
-  .del-btn { width: 32px; height: 32px; border-radius: 8px; background: transparent; border: none; color: var(--muted); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .del-btn:active { color: var(--danger); background: rgba(248,113,113,0.1); }
+/* Export */
+.ecard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.etitle{font-size:13px;font-weight:600;margin-bottom:4px;color:var(--text)}
+.edesc{font-size:12px;color:var(--muted);line-height:1.6}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+.stat{background:var(--surface2);border-radius:10px;padding:12px 10px;text-align:center}
+.stat-val{font-family:var(--mono);font-size:22px;font-weight:500;color:var(--accent)}
+.stat-lbl{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.05em}
+.tags-row{display:flex;flex-wrap:wrap;gap:6px}
+.divider{height:1px;background:var(--border);margin:14px 0}
 
-  /* ── Empty state ── */
-  .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
-  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
-  .empty p { font-size: 13px; line-height: 1.6; }
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:flex-end}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px 36px;width:100%;max-height:85vh;overflow-y:auto}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.modal-title{font-size:15px;font-weight:600;margin-bottom:14px}
 
-  /* ── Export panel ── */
-  .export-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-  .export-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-  .export-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
-  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
-  .stat { background: var(--surface2); border-radius: 10px; padding: 12px 10px; text-align: center; }
-  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--accent); }
-  .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;z-index:9999;transition:transform .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.4);pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:rgba(74,222,128,.4);color:var(--accent)}
+.toast.err{border-color:rgba(248,113,113,.4);color:var(--danger)}
 
-  /* ── Toast ── */
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px; font-size: 13px; font-weight: 500; z-index: 9999; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); white-space: nowrap; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-  .toast.show { transform: translateX(-50%) translateY(0); }
-  .toast.success { border-color: rgba(74,222,128,0.4); color: var(--accent); }
-  .toast.error { border-color: rgba(248,113,113,0.4); color: var(--danger); }
-
-  /* ── Modal ── */
-  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: flex-end; }
-  .modal-bg.open { display: flex; }
-  .modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 16px 32px; width: 100%; max-height: 80vh; overflow-y: auto; }
-  .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
-  .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
-  .divider { height: 1px; background: var(--border); margin: 14px 0; }
-
-  /* ── Numeric input helpers ── */
-  .num-row { display: flex; align-items: center; gap: 0; }
-  .num-row input { text-align: center; border-radius: 0; border-left: none; border-right: none; flex: 1; }
-  .num-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); width: 44px; height: 44px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .num-btn:first-child { border-radius: 8px 0 0 8px; }
-  .num-btn:last-child { border-radius: 0 8px 8px 0; }
-  .num-btn:active { background: var(--border); }
+/* Loading */
+#wasm-loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:12px}
+.spin{width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
+
+<!-- Loading WASM -->
+<div id="wasm-loading">
+  <div class="spin"></div>
+  <div style="font-size:13px;color:var(--muted);font-family:var(--mono)">Cargando escáner…</div>
+</div>
 
 <header>
   <div class="logo">
     <div class="logo-dot"></div>
     <div>
-      <div class="logo-text">Inventario</div>
-      <div class="logo-sub">→ Eleventa</div>
+      <div class="logo-text">Farmacia Ayotla</div>
+      <div class="logo-sub">inventario → eleventa</div>
     </div>
   </div>
-  <div class="header-count" id="header-count">0 productos</div>
+  <div class="hcount" id="hcount">0 productos</div>
 </header>
 
 <div class="tabs">
@@ -155,7 +159,7 @@
   <div class="tab" onclick="switchTab('exportar')">Exportar</div>
 </div>
 
-<!-- ═══ TAB CAPTURA ═══ -->
+<!-- ═══ CAPTURA ═══ -->
 <div id="panel-captura" class="panel active">
 
   <button class="btn btn-scan" id="scan-btn" onclick="toggleScanner()">
@@ -163,106 +167,111 @@
     Escanear código de barras
   </button>
 
-  <div id="scanner-container" style="display:none;">
+  <div id="scanner-wrap">
     <div id="scanner-box">
       <video id="scanner-video" autoplay playsinline muted></video>
+      <canvas id="scanner-canvas"></canvas>
       <div class="scan-overlay">
-        <div class="scan-frame">
-          <div class="scan-line"></div>
-        </div>
+        <div class="scan-frame"><div class="scan-line"></div></div>
       </div>
-      <div class="scan-label"><span id="scan-label-text">Centra el código de barras</span></div>
+      <div class="scan-label" id="scan-label">Centra el código sobre la línea</div>
     </div>
-    <div class="scan-result" id="scan-result" style="display:none;">
+    <div class="scan-result" id="scan-result">
       <div>
-        <div class="scan-result-label">Código detectado</div>
-        <div class="scan-result-code" id="scan-code-text">—</div>
+        <div class="scan-lbl">Código detectado</div>
+        <div class="scan-code" id="scan-code-text">—</div>
       </div>
-      <button class="btn btn-secondary" style="width:auto;padding:8px 12px;font-size:12px;" onclick="clearScan()">Limpiar</button>
+      <button class="btn btn-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="clearScan()">Limpiar</button>
     </div>
   </div>
 
   <div class="form-grid">
     <div class="field">
       <label>Código / Barras</label>
-      <input type="text" id="f-codigo" placeholder="Escribe o escanea" inputmode="numeric">
+      <input type="text" id="f-codigo" placeholder="Escanea o escribe el código" inputmode="numeric">
     </div>
     <div class="field">
-      <label>Descripción del producto</label>
+      <label>Producto</label>
       <input type="text" id="f-desc" placeholder="Ej: Paracetamol 500mg c/20" autocomplete="off">
     </div>
     <div class="row2">
       <div class="field">
-        <label>Precio costo $</label>
+        <label>P. Costo $</label>
         <input type="number" id="f-costo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
       </div>
       <div class="field">
-        <label>Precio venta $</label>
+        <label>P. Venta $</label>
         <input type="number" id="f-venta" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
       </div>
     </div>
     <div class="row2">
       <div class="field">
-        <label>Precio mayoreo $</label>
+        <label>P. Mayoreo $</label>
         <input type="number" id="f-mayoreo" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
       </div>
       <div class="field">
-        <label>Cantidad en inventario</label>
+        <label>Existencia</label>
         <div class="num-row">
-          <button class="num-btn" onclick="adjustQty(-1)">−</button>
-          <input type="number" id="f-qty" placeholder="0" inputmode="numeric" min="0" value="0" style="border-radius:0;">
-          <button class="num-btn" onclick="adjustQty(1)">+</button>
+          <button class="num-btn" onclick="adjQty('f-qty',-1)">−</button>
+          <input type="number" id="f-qty" value="0" inputmode="numeric" min="0">
+          <button class="num-btn" onclick="adjQty('f-qty',1)">+</button>
         </div>
       </div>
     </div>
     <div class="row2">
       <div class="field">
-        <label>Mínimo inventario</label>
-        <input type="number" id="f-minimo" placeholder="5" inputmode="numeric" min="0">
+        <label>Inv. Mínimo</label>
+        <input type="number" id="f-minimo" placeholder="0" inputmode="numeric" min="0" value="0">
       </div>
       <div class="field">
-        <label>Departamento</label>
-        <select id="f-dept">
-          <option value="">Selecciona...</option>
-          <option value="Generico Tab N">Genérico Tab</option>
-          <option value="Generico Jbe N">Genérico Jarabe</option>
-          <option value="Patente Tab N">Patente Tab</option>
-          <option value="Patente Jbe N">Patente Jarabe</option>
-          <option value="Jbe-Susp/Patente">Jbe-Susp/Patente</option>
-          <option value="Pastillas/Patente">Pastillas/Patente</option>
-          <option value="Pomadas/Patente">Pomadas/Patente</option>
-          <option value="Gotas/Patente">Gotas/Patente</option>
-          <option value="Ampolletas N">Ampolletas</option>
-          <option value="Ovulo/supositorio">Óvulo/Supositorio</option>
-          <option value="material de curacion">Material de curación</option>
-          <option value="Leches/complementos">Leches/Complementos</option>
-          <option value="Vit/suplementos">Vit/Suplementos</option>
-          <option value="Naturista">Naturista</option>
-          <option value="Electrolitos">Electrolitos</option>
-          <option value="bebe">Bebé</option>
-          <option value="pañal">Pañal</option>
-          <option value="Perf/Baño">Perf/Baño</option>
-          <option value="Perf/toallas">Perf/Toallas</option>
-          <option value="Perfumeria/Cremas">Perfumería/Cremas</option>
-          <option value="Prf/Cabello">Prf/Cabello</option>
-          <option value="Cuidado Cabello">Cuidado Cabello</option>
-          <option value="Prfm/Desodorantes">Desodorantes</option>
-          <option value="higiene dental">Higiene Dental</option>
-          <option value="salud bucal">Salud Bucal</option>
-          <option value="Salud Sexual">Salud Sexual</option>
-          <option value="controlado">Controlado</option>
-          <option value="rebotica">Rebotica</option>
-          <option value="sobres">Sobres</option>
-          <option value="chocolates">Chocolates</option>
-          <option value="agua">Agua</option>
-          <option value="Suelto">Suelto</option>
-          <option value="- Sin Departamento -">Sin Departamento</option>
-        </select>
+        <label>Inv. Máximo</label>
+        <input type="number" id="f-maximo" placeholder="0" inputmode="numeric" min="0" value="0">
       </div>
     </div>
     <div class="field">
+      <label>Departamento</label>
+      <select id="f-dept">
+        <option value="">Selecciona...</option>
+        <option value="Generico Tab N">Genérico Tab</option>
+        <option value="Generico Jbe N">Genérico Jarabe</option>
+        <option value="Patente Tab N">Patente Tab</option>
+        <option value="Patente Jbe N">Patente Jarabe</option>
+        <option value="tabletas/patente">Tabletas/Patente</option>
+        <option value="patente">Patente</option>
+        <option value="Jbe-Susp/Patente">Jbe-Susp/Patente</option>
+        <option value="Pastillas/Patente">Pastillas/Patente</option>
+        <option value="Pomadas/Patente">Pomadas/Patente</option>
+        <option value="Gotas/Patente">Gotas/Patente</option>
+        <option value="Ampolletas N">Ampolletas</option>
+        <option value="Ovulo/supositorio">Óvulo/Supositorio</option>
+        <option value="sobres">Sobres</option>
+        <option value="material de curacion">Material de Curación</option>
+        <option value="Leches/complementos">Leches/Complementos</option>
+        <option value="bebe">Bebé</option>
+        <option value="pañal">Pañal</option>
+        <option value="Vit/suplementos">Vit/Suplementos</option>
+        <option value="Naturista">Naturista</option>
+        <option value="Electrolitos">Electrolitos</option>
+        <option value="Perf/Baño">Perf/Baño</option>
+        <option value="Perf/toallas">Perf/Toallas</option>
+        <option value="Perfumeria/Cremas">Perfumería/Cremas</option>
+        <option value="Prf/Cabello">Prf/Cabello</option>
+        <option value="Cuidado Cabello">Cuidado Cabello</option>
+        <option value="Prfm/Desodorantes">Desodorantes</option>
+        <option value="higiene dental">Higiene Dental</option>
+        <option value="salud bucal">Salud Bucal</option>
+        <option value="Salud Sexual">Salud Sexual</option>
+        <option value="controlado">Controlado</option>
+        <option value="rebotica">Rebotica</option>
+        <option value="chocolates">Chocolates</option>
+        <option value="agua">Agua</option>
+        <option value="Suelto">Suelto</option>
+        <option value="- Sin Departamento -">Sin Departamento</option>
+      </select>
+    </div>
+    <div class="field">
       <label>Proveedor</label>
-      <select id="f-proveedor">
+      <select id="f-prov">
         <option value="">Selecciona...</option>
         <option value="NADRO">NADRO</option>
         <option value="Levic/Reder">Levic / Reder</option>
@@ -280,80 +289,72 @@
   </div>
 </div>
 
-<!-- ═══ TAB LISTA ═══ -->
+<!-- ═══ LISTA ═══ -->
 <div id="panel-lista" class="panel">
-  <input class="search-input" id="search-input" placeholder="Buscar por nombre o código..." oninput="renderList()">
+  <input class="search-input" id="search-input" placeholder="Buscar por nombre o código…" oninput="renderList()">
   <div class="list-header">
-    <span class="list-title" id="list-count-label">0 productos</span>
-    <button class="btn btn-danger" style="width:auto;padding:7px 12px;font-size:12px;" onclick="confirmClearAll()">Limpiar todo</button>
+    <span class="list-title" id="list-label">0 productos</span>
+    <button class="btn btn-danger" style="width:auto;padding:7px 12px;font-size:12px" onclick="confirmClear()">Limpiar todo</button>
   </div>
   <div id="product-list"></div>
 </div>
 
-<!-- ═══ TAB EXPORTAR ═══ -->
+<!-- ═══ EXPORTAR ═══ -->
 <div id="panel-exportar" class="panel">
-  <div class="export-card">
-    <div class="export-title">Importar tu inventario actual</div>
-    <div class="export-desc">Carga tu archivo de Eleventa (.xlsx) para no capturar todo desde cero. Los precios con <strong>$</strong> se convierten automáticamente.</div>
+
+  <div class="ecard">
+    <div class="etitle">Importar inventario existente</div>
+    <div class="edesc">Carga tu archivo de Eleventa (.xlsx). Los precios con $ se convierten automáticamente. Los 4,491 productos de tu archivo actual se cargan en segundos.</div>
   </div>
-  <label style="display:block;margin-bottom:16px;">
-    <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none;" onchange="importExcel(event)">
-    <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()" style="margin-bottom:0;">
+  <label style="display:block;margin-bottom:16px">
+    <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)">
+    <button class="btn btn-import" onclick="document.getElementById('import-file').click()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-      Cargar Inventario150326.xlsx
+      Cargar Inventario.xlsx desde Eleventa
     </button>
   </label>
 
   <div class="divider"></div>
 
-  <div class="export-card">
-    <div class="export-title">Exportar para Eleventa</div>
-    <div class="export-desc">Genera el archivo con las columnas exactas de Eleventa, listo para <strong>Catálogo → Importar productos</strong>.</div>
+  <div class="ecard">
+    <div class="etitle">Exportar para Eleventa</div>
+    <div class="edesc">Genera el .xlsx con las columnas exactas de Eleventa listo para <strong style="color:var(--text)">Catálogo → Importar productos</strong>.</div>
   </div>
 
   <div class="stat-grid">
-    <div class="stat">
-      <div class="stat-val" id="stat-total">0</div>
-      <div class="stat-lbl">Productos</div>
-    </div>
-    <div class="stat">
-      <div class="stat-val" id="stat-low">0</div>
-      <div class="stat-lbl">Sin mínimo</div>
-    </div>
-    <div class="stat">
-      <div class="stat-val" id="stat-val">$0</div>
-      <div class="stat-lbl">Valor costo</div>
+    <div class="stat"><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Productos</div></div>
+    <div class="stat"><div class="stat-val" id="s-sinmin">0</div><div class="stat-lbl">Sin mínimo</div></div>
+    <div class="stat"><div class="stat-val" id="s-valor">$0</div><div class="stat-lbl">Valor costo</div></div>
+  </div>
+
+  <div class="ecard" style="margin-top:0">
+    <div class="etitle" style="font-size:12px;color:var(--muted);margin-bottom:8px">Columnas exportadas (formato Eleventa)</div>
+    <div class="tags-row">
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">Código</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">Producto</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">P. Costo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">P. Venta</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">P. Mayoreo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">Existencia</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">Inv. Mínimo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">Inv. Máximo</span>
+      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px">Departamento</span>
     </div>
   </div>
 
-  <div class="export-card" style="margin-top:0;">
-    <div class="export-title" style="font-size:12px;color:var(--muted);margin-bottom:8px;">Columnas exportadas (formato Eleventa)</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Código</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Producto</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">P. Costo</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">P. Venta</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">P. Mayoreo</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Existencia</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Inv. Mínimo</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Inv. Máximo</span>
-      <span class="tag tag-dept" style="font-size:11px;padding:4px 9px;">Departamento</span>
-    </div>
-  </div>
-
-  <button class="btn btn-export" onclick="exportExcel()" style="margin-top:4px;">
+  <button class="btn btn-export" onclick="exportExcel()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
     Descargar inventario_eleventa.xlsx
   </button>
 
   <div class="divider"></div>
-  <div class="export-card">
-    <div class="export-title" style="font-size:12px;">Cómo importar en Eleventa</div>
-    <div class="export-desc" style="margin-top:6px;">
-      1. Ve a <strong>Catálogo → Importar productos</strong><br>
+  <div class="ecard">
+    <div class="etitle" style="font-size:12px">Cómo importar en Eleventa</div>
+    <div class="edesc" style="margin-top:6px">
+      1. Ve a <strong style="color:var(--text)">Catálogo → Importar productos</strong><br>
       2. Selecciona el archivo descargado<br>
-      3. Mapea las columnas — los nombres ya coinciden<br>
-      4. Activa <strong>"Actualizar inventario"</strong> para actualizar cantidades
+      3. Los nombres de columna ya coinciden exactamente<br>
+      4. Activa <strong style="color:var(--text)">"Actualizar inventario"</strong> para actualizar cantidades
     </div>
   </div>
 </div>
@@ -363,66 +364,69 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Editar producto</div>
-    <div class="form-grid" id="edit-form-grid">
+    <div class="form-grid">
       <div class="field"><label>Código</label><input type="text" id="e-codigo" inputmode="numeric"></div>
-      <div class="field"><label>Descripción</label><input type="text" id="e-desc"></div>
+      <div class="field"><label>Producto</label><input type="text" id="e-desc"></div>
       <div class="row2">
-        <div class="field"><label>Precio costo $</label><input type="number" id="e-costo" step="0.01" inputmode="decimal"></div>
-        <div class="field"><label>Precio venta $</label><input type="number" id="e-venta" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label>P. Costo $</label><input type="number" id="e-costo" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label>P. Venta $</label><input type="number" id="e-venta" step="0.01" inputmode="decimal"></div>
       </div>
       <div class="row2">
-        <div class="field"><label>Mayoreo $</label><input type="number" id="e-mayoreo" step="0.01" inputmode="decimal"></div>
-        <div class="field"><label>Cantidad</label>
+        <div class="field"><label>P. Mayoreo $</label><input type="number" id="e-mayoreo" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label>Existencia</label>
           <div class="num-row">
-            <button class="num-btn" onclick="adjustEditQty(-1)">−</button>
+            <button class="num-btn" onclick="adjQty('e-qty',-1)">−</button>
             <input type="number" id="e-qty" inputmode="numeric" min="0">
-            <button class="num-btn" onclick="adjustEditQty(1)">+</button>
+            <button class="num-btn" onclick="adjQty('e-qty',1)">+</button>
           </div>
         </div>
       </div>
       <div class="row2">
-        <div class="field"><label>Mínimo</label><input type="number" id="e-minimo" inputmode="numeric"></div>
-        <div class="field"><label>Departamento</label>
-          <select id="e-dept">
-            <option value="">Selecciona...</option>
-            <option value="Generico Tab N">Genérico Tab</option>
-            <option value="Generico Jbe N">Genérico Jarabe</option>
-            <option value="Patente Tab N">Patente Tab</option>
-            <option value="Patente Jbe N">Patente Jarabe</option>
-            <option value="Jbe-Susp/Patente">Jbe-Susp/Patente</option>
-            <option value="Pastillas/Patente">Pastillas/Patente</option>
-            <option value="Pomadas/Patente">Pomadas/Patente</option>
-            <option value="Gotas/Patente">Gotas/Patente</option>
-            <option value="Ampolletas N">Ampolletas</option>
-            <option value="Ovulo/supositorio">Óvulo/Supositorio</option>
-            <option value="material de curacion">Material de curación</option>
-            <option value="Leches/complementos">Leches/Complementos</option>
-            <option value="Vit/suplementos">Vit/Suplementos</option>
-            <option value="Naturista">Naturista</option>
-            <option value="Electrolitos">Electrolitos</option>
-            <option value="bebe">Bebé</option>
-            <option value="pañal">Pañal</option>
-            <option value="Perf/Baño">Perf/Baño</option>
-            <option value="Perf/toallas">Perf/Toallas</option>
-            <option value="Perfumeria/Cremas">Perfumería/Cremas</option>
-            <option value="Prf/Cabello">Prf/Cabello</option>
-            <option value="Cuidado Cabello">Cuidado Cabello</option>
-            <option value="Prfm/Desodorantes">Desodorantes</option>
-            <option value="higiene dental">Higiene Dental</option>
-            <option value="salud bucal">Salud Bucal</option>
-            <option value="Salud Sexual">Salud Sexual</option>
-            <option value="controlado">Controlado</option>
-            <option value="rebotica">Rebotica</option>
-            <option value="sobres">Sobres</option>
-            <option value="chocolates">Chocolates</option>
-            <option value="agua">Agua</option>
-            <option value="Suelto">Suelto</option>
-            <option value="- Sin Departamento -">Sin Departamento</option>
-          </select>
-        </div>
+        <div class="field"><label>Inv. Mínimo</label><input type="number" id="e-minimo" inputmode="numeric"></div>
+        <div class="field"><label>Inv. Máximo</label><input type="number" id="e-maximo" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label>Departamento</label>
+        <select id="e-dept">
+          <option value="">Selecciona...</option>
+          <option value="Generico Tab N">Genérico Tab</option>
+          <option value="Generico Jbe N">Genérico Jarabe</option>
+          <option value="Patente Tab N">Patente Tab</option>
+          <option value="Patente Jbe N">Patente Jarabe</option>
+          <option value="tabletas/patente">Tabletas/Patente</option>
+          <option value="patente">Patente</option>
+          <option value="Jbe-Susp/Patente">Jbe-Susp/Patente</option>
+          <option value="Pastillas/Patente">Pastillas/Patente</option>
+          <option value="Pomadas/Patente">Pomadas/Patente</option>
+          <option value="Gotas/Patente">Gotas/Patente</option>
+          <option value="Ampolletas N">Ampolletas</option>
+          <option value="Ovulo/supositorio">Óvulo/Supositorio</option>
+          <option value="sobres">Sobres</option>
+          <option value="material de curacion">Material de Curación</option>
+          <option value="Leches/complementos">Leches/Complementos</option>
+          <option value="bebe">Bebé</option>
+          <option value="pañal">Pañal</option>
+          <option value="Vit/suplementos">Vit/Suplementos</option>
+          <option value="Naturista">Naturista</option>
+          <option value="Electrolitos">Electrolitos</option>
+          <option value="Perf/Baño">Perf/Baño</option>
+          <option value="Perf/toallas">Perf/Toallas</option>
+          <option value="Perfumeria/Cremas">Perfumería/Cremas</option>
+          <option value="Prf/Cabello">Prf/Cabello</option>
+          <option value="Cuidado Cabello">Cuidado Cabello</option>
+          <option value="Prfm/Desodorantes">Desodorantes</option>
+          <option value="higiene dental">Higiene Dental</option>
+          <option value="salud bucal">Salud Bucal</option>
+          <option value="Salud Sexual">Salud Sexual</option>
+          <option value="controlado">Controlado</option>
+          <option value="rebotica">Rebotica</option>
+          <option value="chocolates">Chocolates</option>
+          <option value="agua">Agua</option>
+          <option value="Suelto">Suelto</option>
+          <option value="- Sin Departamento -">Sin Departamento</option>
+        </select>
       </div>
       <div class="field"><label>Proveedor</label>
-        <select id="e-proveedor">
+        <select id="e-prov">
           <option value="">Selecciona...</option>
           <option value="NADRO">NADRO</option>
           <option value="Levic/Reder">Levic / Reder</option>
@@ -437,420 +441,373 @@
   </div>
 </div>
 
-<!-- ═══ TOAST ═══ -->
 <div class="toast" id="toast"></div>
 
 <script>
-// ── State ──────────────────────────────────────────────────────────
-let products = JSON.parse(localStorage.getItem('inv_products') || '[]');
-let editIndex = -1;
-let scannerRunning = false;
-let lastScanned = '';
-
-// ── Persistence ────────────────────────────────────────────────────
-function save() {
-  localStorage.setItem('inv_products', JSON.stringify(products));
-  updateCounters();
-}
-
-// ── Tabs ────────────────────────────────────────────────────────────
-function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['captura','lista','exportar'];
-    t.classList.toggle('active', tabs[i] === tab);
-  });
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + tab).classList.add('active');
-  if (tab === 'lista') renderList();
-  if (tab === 'exportar') updateStats();
-  if (tab !== 'captura' && scannerRunning) stopScanner();
-}
-
-// ── Scanner (BarcodeDetector nativo — sin librerías externas) ────────
+// ── Estado ────────────────────────────────────────────────────────────
+let products = JSON.parse(localStorage.getItem('farma_inv') || '[]');
+let editIdx  = -1;
+let scanning = false;
+let lastCode = '';
 let scanStream = null;
-let scanAnimFrame = null;
-let scanCanvas = null;
-let scanCtx = null;
+let scanTimer  = null;
+let detector   = null;
 
-function toggleScanner() {
-  if (scannerRunning) stopScanner();
-  else startScanner();
-}
-
-async function startScanner() {
-  // Verificar soporte
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast('Tu navegador no soporta cámara', 'error');
-    return;
-  }
-
-  document.getElementById('scanner-container').style.display = 'block';
-  document.getElementById('scan-btn').classList.add('scanning');
-  document.getElementById('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="4.22" y1="4.22" x2="19.78" y2="19.78"/></svg> Detener cámara`;
-
+// ── Init ZBar WASM polyfill ───────────────────────────────────────────
+(async () => {
   try {
-    const video = document.getElementById('scanner-video');
-
-    // Constraints simples — más compatibles con iOS
-    scanStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { min: 640, ideal: 1280, max: 1920 },
-        height: { min: 480, ideal: 720,  max: 1080 },
-      }
+    // Si el navegador no tiene BarcodeDetector nativo, usar polyfill ZBar
+    if (!('BarcodeDetector' in window)) {
+      window.BarcodeDetector = barcodeDetectorPolyfill.BarcodeDetectorPolyfill;
+    }
+    detector = new BarcodeDetector({
+      formats: ['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code']
     });
-
-    video.srcObject = scanStream;
-    video.setAttribute('playsinline', true);
-    video.setAttribute('muted', true);
-    await video.play();
-    scannerRunning = true;
-
-    // Canvas oculto para capturar frames
-    scanCanvas = document.createElement('canvas');
-    scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
-
-    // Intentar BarcodeDetector nativo (Safari 17.4+, Chrome 88+)
-    if ('BarcodeDetector' in window) {
-      startNativeDetector(video);
-    } else {
-      // Fallback: mostrar video y pedir código manual
-      showManualFallback();
-    }
-
-  } catch (err) {
-    const msg = err.name === 'NotAllowedError'  ? 'Permiso de cámara denegado — ve a Ajustes → Safari → Cámara' :
-                err.name === 'NotFoundError'     ? 'No se encontró cámara en este dispositivo' :
-                err.name === 'NotReadableError'  ? 'La cámara está en uso por otra app' :
-                err.name === 'OverconstrainedError' ? 'Cámara no compatible con los requisitos' :
-                'Error: ' + err.message;
-    showToast(msg, 'error');
-    document.getElementById('scan-label-text').textContent = msg;
-    stopScanner();
+    // Prueba rápida para confirmar que funciona
+    await BarcodeDetector.getSupportedFormats();
+  } catch(e) {
+    console.warn('BarcodeDetector no disponible:', e);
+    detector = null;
   }
-}
+  document.getElementById('wasm-loading').style.display = 'none';
+  updateCounters();
+})();
 
-function startNativeDetector(video) {
-  const detector = new BarcodeDetector({
-    formats: ['ean_13','ean_8','code_128','code_39','upc_a','upc_e','qr_code','data_matrix']
-  });
+// ── Utilidades ────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const pf = v  => parseFloat(String(v||0).replace(/[$,\s]/g,'')) || 0;
+const pi = v  => parseInt(String(v||0).replace(/[$,\s]/g,''))   || 0;
 
-  async function tick() {
-    if (!scannerRunning) return;
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      scanCanvas.width  = video.videoWidth;
-      scanCanvas.height = video.videoHeight;
-      scanCtx.drawImage(video, 0, 0);
-      try {
-        const barcodes = await detector.detect(scanCanvas);
-        if (barcodes.length > 0) {
-          const code = barcodes[0].rawValue;
-          if (code !== lastScanned) onCodeDetected(code);
-          return;
-        }
-      } catch(e) {}
-    }
-    scanAnimFrame = requestAnimationFrame(tick);
-  }
-  scanAnimFrame = requestAnimationFrame(tick);
-}
-
-function showManualFallback() {
-  // El video sigue mostrándose — solo cambia el label
-  document.getElementById('scan-label-text').textContent =
-    'Escáner no disponible — ingresa el código manualmente';
-  showToast('Ingresa el código manualmente en el campo', 'error');
-  stopScanner();
-}
-
-function onCodeDetected(code) {
-  lastScanned = code;
-  document.getElementById('f-codigo').value = code;
-  document.getElementById('scan-code-text').textContent = code;
-  document.getElementById('scan-result').style.display = 'flex';
-  showToast('✓ Código: ' + code, 'success');
-  if (navigator.vibrate) navigator.vibrate(60);
-  stopScanner();
-  setTimeout(() => document.getElementById('f-desc').focus(), 300);
-}
-
-function stopScanner() {
-  if (scanAnimFrame) { cancelAnimationFrame(scanAnimFrame); scanAnimFrame = null; }
-  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-  const video = document.getElementById('scanner-video');
-  if (video) { video.srcObject = null; }
-  scannerRunning = false;
-  document.getElementById('scanner-container').style.display = 'none';
-  document.getElementById('scan-btn').classList.remove('scanning');
-  document.getElementById('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M16 16h5v5M16 21h0M21 16h0"/></svg> Escanear código de barras`;
-}
-
-function clearScan() {
-  lastScanned = '';
-  document.getElementById('scan-result').style.display = 'none';
-  document.getElementById('f-codigo').value = '';
-}
-
-// ── Form helpers ────────────────────────────────────────────────────
-function adjustQty(d) {
-  const inp = document.getElementById('f-qty');
-  inp.value = Math.max(0, (parseInt(inp.value) || 0) + d);
-}
-function adjustEditQty(d) {
-  const inp = document.getElementById('e-qty');
-  inp.value = Math.max(0, (parseInt(inp.value) || 0) + d);
-}
-function clearForm() {
-  ['f-codigo','f-desc','f-costo','f-venta','f-mayoreo','f-qty','f-minimo'].forEach(id => {
-    document.getElementById(id).value = id === 'f-qty' ? '0' : '';
-  });
-  document.getElementById('f-dept').value = '';
-  document.getElementById('f-proveedor').value = '';
-  lastScanned = '';
-  document.getElementById('scan-result').style.display = 'none';
-}
-
-// ── Add product ─────────────────────────────────────────────────────
-function addProduct() {
-  const desc = document.getElementById('f-desc').value.trim();
-  if (!desc) { showToast('Escribe la descripción del producto', 'error'); document.getElementById('f-desc').focus(); return; }
-  const codigo = document.getElementById('f-codigo').value.trim();
-  const p = {
-    codigo,
-    descripcion: desc,
-    precio_costo: parseFloat(document.getElementById('f-costo').value) || 0,
-    precio_venta: parseFloat(document.getElementById('f-venta').value) || 0,
-    precio_mayoreo: parseFloat(document.getElementById('f-mayoreo').value) || 0,
-    cantidad_inventario: parseInt(document.getElementById('f-qty').value) || 0,
-    minimo: parseInt(document.getElementById('f-minimo').value) || 0,
-    maximo: 0,
-    departamento: document.getElementById('f-dept').value,
-    proveedor: document.getElementById('f-proveedor').value,
-  };
-  if (codigo && products.some((x,i) => x.codigo === codigo)) {
-    showToast('Código duplicado — actualiza en Lista', 'error'); return;
-  }
-  products.unshift(p);
-  save();
-  showToast('✓ ' + desc.substring(0,30), 'success');
-  clearForm();
-}
-
-// ── List ─────────────────────────────────────────────────────────────
-function renderList() {
-  const q = (document.getElementById('search-input').value || '').toLowerCase();
-  const filtered = products.filter(p =>
-    p.descripcion.toLowerCase().includes(q) ||
-    (p.codigo || '').toLowerCase().includes(q)
-  );
-  const el = document.getElementById('product-list');
-  document.getElementById('list-count-label').textContent = filtered.length + ' producto' + (filtered.length !== 1 ? 's' : '');
-  if (filtered.length === 0) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">○</div><p>${products.length === 0 ? 'No hay productos aún.<br>Empieza capturando en la pestaña <strong>Captura</strong>.' : 'Sin resultados para "' + q + '"'}</p></div>`;
-    return;
-  }
-  el.innerHTML = filtered.map((p, i) => {
-    const realIdx = products.indexOf(p);
-    const isLow = p.cantidad_inventario <= p.minimo;
-    return `<div class="product-card" onclick="openEdit(${realIdx})">
-      <div class="product-card-left">
-        <div class="product-name">${p.descripcion}</div>
-        <div class="product-code">${p.codigo || '—'}</div>
-        <div class="product-meta">
-          <span class="tag ${isLow ? 'tag-qty low' : 'tag-qty'}">${p.cantidad_inventario} uds${isLow ? ' ⚠' : ''}</span>
-          <span class="tag tag-cost">$${p.precio_venta.toFixed(2)}</span>
-          ${p.departamento ? `<span class="tag tag-dept">${p.departamento}</span>` : ''}
-        </div>
-      </div>
-      <button class="del-btn" onclick="event.stopPropagation();deleteProduct(${realIdx})">×</button>
-    </div>`;
-  }).join('');
-}
-
-function deleteProduct(idx) {
-  if (confirm('¿Eliminar "' + products[idx].descripcion + '"?')) {
-    products.splice(idx, 1);
-    save();
-    renderList();
-    showToast('Producto eliminado', 'error');
-  }
-}
-
-function confirmClearAll() {
-  if (products.length === 0) { showToast('No hay productos', 'error'); return; }
-  if (confirm('¿Eliminar TODOS los ' + products.length + ' productos? Esta acción no se puede deshacer.')) {
-    products = [];
-    save();
-    renderList();
-    showToast('Lista vaciada', 'error');
-  }
-}
-
-// ── Edit modal ───────────────────────────────────────────────────────
-function openEdit(idx) {
-  editIndex = idx;
-  const p = products[idx];
-  document.getElementById('e-codigo').value = p.codigo || '';
-  document.getElementById('e-desc').value = p.descripcion;
-  document.getElementById('e-costo').value = p.precio_costo;
-  document.getElementById('e-venta').value = p.precio_venta;
-  document.getElementById('e-mayoreo').value = p.precio_mayoreo || '';
-  document.getElementById('e-qty').value = p.cantidad_inventario;
-  document.getElementById('e-minimo').value = p.minimo;
-  document.getElementById('e-dept').value = p.departamento || '';
-  document.getElementById('e-proveedor').value = p.proveedor || '';
-  document.getElementById('edit-modal').classList.add('open');
-}
-
-function closeModal() {
-  document.getElementById('edit-modal').classList.remove('open');
-  editIndex = -1;
-}
-
-function saveEdit() {
-  if (editIndex < 0) return;
-  products[editIndex] = {
-    codigo: document.getElementById('e-codigo').value.trim(),
-    descripcion: document.getElementById('e-desc').value.trim(),
-    precio_costo: parseFloat(document.getElementById('e-costo').value) || 0,
-    precio_venta: parseFloat(document.getElementById('e-venta').value) || 0,
-    precio_mayoreo: parseFloat(document.getElementById('e-mayoreo').value) || 0,
-    cantidad_inventario: parseInt(document.getElementById('e-qty').value) || 0,
-    minimo: parseInt(document.getElementById('e-minimo').value) || 5,
-    departamento: document.getElementById('e-dept').value,
-    proveedor: document.getElementById('e-proveedor').value,
-  };
-  save();
-  closeModal();
-  renderList();
-  showToast('Producto actualizado', 'success');
-}
-
-document.getElementById('edit-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('edit-modal')) closeModal();
-});
-
-// ── Stats ────────────────────────────────────────────────────────────
-function updateStats() {
-  const sinMinimo = products.filter(p => p.minimo === 0).length;
-  const val = products.reduce((s, p) => s + (p.precio_costo * p.cantidad_inventario), 0);
-  document.getElementById('stat-total').textContent = products.length;
-  document.getElementById('stat-low').textContent = sinMinimo;
-  document.getElementById('stat-val').textContent = '$' + (val >= 1000000 ? (val/1000000).toFixed(1) + 'M' : val >= 1000 ? (val/1000).toFixed(1) + 'k' : val.toFixed(0));
+function save() {
+  localStorage.setItem('farma_inv', JSON.stringify(products));
+  updateCounters();
 }
 
 function updateCounters() {
   const n = products.length;
-  document.getElementById('header-count').textContent = n + (n === 1 ? ' producto' : ' productos');
+  $('hcount').textContent = n + (n===1?' producto':' productos');
 }
 
-// ── Import from Eleventa Excel ────────────────────────────────────────
-function parsePrice(val) {
-  if (val === null || val === undefined) return 0;
-  return parseFloat(String(val).replace(/[$,\s]/g, '')) || 0;
+function adjQty(id, d) {
+  const el = $(id);
+  el.value = Math.max(0, (parseInt(el.value)||0) + d);
 }
 
+// ── Tabs ──────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['captura','lista','exportar'].forEach((t,i) => {
+    document.querySelectorAll('.tab')[i].classList.toggle('active', t===tab);
+    $('panel-'+t).classList.toggle('active', t===tab);
+  });
+  if (tab==='lista')    renderList();
+  if (tab==='exportar') updateStats();
+  if (tab!=='captura' && scanning) stopScanner();
+}
+
+// ── Scanner ───────────────────────────────────────────────────────────
+function toggleScanner() {
+  if (scanning) stopScanner(); else startScanner();
+}
+
+async function startScanner() {
+  if (!detector) {
+    toast('Escáner no disponible — ingresa el código manualmente', 'err');
+    return;
+  }
+
+  $('scanner-wrap').style.display = 'block';
+  $('scan-btn').classList.add('active');
+  $('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="4.22" y1="4.22" x2="19.78" y2="19.78"/></svg> Detener cámara`;
+
+  try {
+    const video = $('scanner-video');
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { min:640, ideal:1280, max:1920 },
+        height: { min:480, ideal:720,  max:1080 }
+      }
+    });
+    video.srcObject = scanStream;
+    await video.play();
+    scanning = true;
+    scanLoop();
+  } catch(err) {
+    const msg =
+      err.name==='NotAllowedError'     ? 'Permiso denegado — Ajustes → Safari → Cámara → Permitir' :
+      err.name==='NotFoundError'       ? 'No se encontró cámara trasera' :
+      err.name==='NotReadableError'    ? 'Cámara en uso por otra app' :
+      'Error cámara: ' + err.name;
+    toast(msg, 'err');
+    $('scan-label').textContent = msg;
+    stopScanner();
+  }
+}
+
+async function scanLoop() {
+  if (!scanning) return;
+  const video  = $('scanner-video');
+  const canvas = $('scanner-canvas');
+  const ctx    = canvas.getContext('2d', { willReadFrequently:true });
+
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    try {
+      const codes = await detector.detect(canvas);
+      if (codes.length > 0) {
+        const code = codes[0].rawValue;
+        if (code !== lastCode) onCode(code);
+        return;
+      }
+    } catch(e) {}
+  }
+  scanTimer = setTimeout(scanLoop, 150);
+}
+
+function onCode(code) {
+  lastCode = code;
+  $('f-codigo').value = code;
+  $('scan-code-text').textContent = code;
+  $('scan-result').style.display = 'flex';
+  toast('✓ ' + code, 'ok');
+  if (navigator.vibrate) navigator.vibrate(80);
+  stopScanner();
+  setTimeout(() => $('f-desc').focus(), 350);
+}
+
+function stopScanner() {
+  clearTimeout(scanTimer);
+  if (scanStream) { scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+  const v = $('scanner-video'); if(v) v.srcObject=null;
+  scanning = false;
+  $('scanner-wrap').style.display = 'none';
+  $('scan-btn').classList.remove('active');
+  $('scan-btn').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="16" y="3" width="5" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><path d="M16 16h5v5M16 21h0M21 16h0"/></svg> Escanear código de barras`;
+}
+
+function clearScan() {
+  lastCode=''; $('f-codigo').value='';
+  $('scan-result').style.display='none';
+}
+
+// ── Form ──────────────────────────────────────────────────────────────
+function clearForm() {
+  ['f-codigo','f-desc','f-costo','f-venta','f-mayoreo'].forEach(id=>$(id).value='');
+  $('f-qty').value='0'; $('f-minimo').value='0'; $('f-maximo').value='0';
+  $('f-dept').value=''; $('f-prov').value='';
+  clearScan();
+}
+
+function addProduct() {
+  const desc = $('f-desc').value.trim();
+  if (!desc) { toast('Escribe el nombre del producto', 'err'); $('f-desc').focus(); return; }
+  const codigo = $('f-codigo').value.trim();
+  if (codigo && products.some(p=>p.codigo===codigo)) {
+    toast('Código duplicado — edítalo en Lista', 'err'); return;
+  }
+  products.unshift({
+    codigo, descripcion:desc,
+    precio_costo:    pf($('f-costo').value),
+    precio_venta:    pf($('f-venta').value),
+    precio_mayoreo:  pf($('f-mayoreo').value),
+    existencia:      pi($('f-qty').value),
+    inv_minimo:      pi($('f-minimo').value),
+    inv_maximo:      pi($('f-maximo').value),
+    departamento:    $('f-dept').value,
+    proveedor:       $('f-prov').value,
+  });
+  save();
+  toast('✓ ' + desc.substring(0,28), 'ok');
+  clearForm();
+}
+
+// ── Lista ─────────────────────────────────────────────────────────────
+function renderList() {
+  const q = ($('search-input').value||'').toLowerCase();
+  const fil = products.filter(p =>
+    p.descripcion.toLowerCase().includes(q) ||
+    (p.codigo||'').includes(q)
+  );
+  $('list-label').textContent = fil.length + ' producto' + (fil.length!==1?'s':'');
+  const el = $('product-list');
+  if (!fil.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">○</div><p>${
+      products.length===0
+        ? 'Sin productos aún.<br>Empieza en <strong>Captura</strong> o importa tu Excel en <strong>Exportar</strong>.'
+        : 'Sin resultados para "'+q+'"'
+    }</p></div>`;
+    return;
+  }
+  el.innerHTML = fil.map(p => {
+    const idx  = products.indexOf(p);
+    const isLow = p.inv_minimo > 0 && p.existencia <= p.inv_minimo;
+    return `<div class="pcard" onclick="openEdit(${idx})">
+      <div class="pcard-left">
+        <div class="pname">${p.descripcion}</div>
+        <div class="pcode">${p.codigo||'—'}</div>
+        <div class="pmeta">
+          <span class="tag ${isLow?'tag-qty low':'tag-qty'}">${p.existencia} uds${isLow?' ⚠':''}</span>
+          <span class="tag tag-cost">$${p.precio_venta.toFixed(2)}</span>
+          ${p.departamento?`<span class="tag tag-dept">${p.departamento}</span>`:''}
+        </div>
+      </div>
+      <button class="del-btn" onclick="event.stopPropagation();delProduct(${idx})">×</button>
+    </div>`;
+  }).join('');
+}
+
+function delProduct(idx) {
+  if (confirm('¿Eliminar "'+products[idx].descripcion+'"?')) {
+    products.splice(idx,1); save(); renderList();
+    toast('Eliminado','err');
+  }
+}
+
+function confirmClear() {
+  if (!products.length) { toast('No hay productos','err'); return; }
+  if (confirm('¿Eliminar TODOS los '+products.length+' productos? No se puede deshacer.')) {
+    products=[]; save(); renderList(); toast('Lista vaciada','err');
+  }
+}
+
+// ── Edit Modal ────────────────────────────────────────────────────────
+function openEdit(idx) {
+  editIdx = idx;
+  const p = products[idx];
+  $('e-codigo').value  = p.codigo||'';
+  $('e-desc').value    = p.descripcion;
+  $('e-costo').value   = p.precio_costo;
+  $('e-venta').value   = p.precio_venta;
+  $('e-mayoreo').value = p.precio_mayoreo||'';
+  $('e-qty').value     = p.existencia;
+  $('e-minimo').value  = p.inv_minimo;
+  $('e-maximo').value  = p.inv_maximo||0;
+  $('e-dept').value    = p.departamento||'';
+  $('e-prov').value    = p.proveedor||'';
+  $('edit-modal').classList.add('open');
+}
+
+function closeModal() { $('edit-modal').classList.remove('open'); editIdx=-1; }
+
+function saveEdit() {
+  if (editIdx<0) return;
+  products[editIdx] = {
+    codigo:          $('e-codigo').value.trim(),
+    descripcion:     $('e-desc').value.trim(),
+    precio_costo:    pf($('e-costo').value),
+    precio_venta:    pf($('e-venta').value),
+    precio_mayoreo:  pf($('e-mayoreo').value),
+    existencia:      pi($('e-qty').value),
+    inv_minimo:      pi($('e-minimo').value),
+    inv_maximo:      pi($('e-maximo').value),
+    departamento:    $('e-dept').value,
+    proveedor:       $('e-prov').value,
+  };
+  save(); closeModal(); renderList(); toast('Guardado','ok');
+}
+
+$('edit-modal').addEventListener('click', e => {
+  if (e.target===$('edit-modal')) closeModal();
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────
+function updateStats() {
+  const sinMin = products.filter(p=>p.inv_minimo===0).length;
+  const val    = products.reduce((s,p)=>s+(p.precio_costo*p.existencia),0);
+  $('s-total').textContent  = products.length;
+  $('s-sinmin').textContent = sinMin;
+  $('s-valor').textContent  = val>=1e6 ? '$'+(val/1e6).toFixed(1)+'M'
+                            : val>=1e3 ? '$'+(val/1e3).toFixed(1)+'k'
+                            : '$'+val.toFixed(0);
+}
+
+// ── Import ────────────────────────────────────────────────────────────
 function importExcel(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = e => {
     try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      if (rows.length === 0) { showToast('El archivo está vacío', 'error'); return; }
+      const wb   = XLSX.read(e.target.result, { type:'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
+      if (!rows.length) { toast('Archivo vacío','err'); return; }
 
-      // Detectar nombres de columnas flexiblemente
-      const firstRow = rows[0];
-      const keys = Object.keys(firstRow);
-      const findCol = (...candidates) => keys.find(k => candidates.some(c => k.toLowerCase().includes(c.toLowerCase()))) || '';
+      const k = Object.keys(rows[0]);
+      const fc = (...cands) => k.find(c=>cands.some(x=>c.toLowerCase().includes(x.toLowerCase())))||'';
 
-      const colCodigo  = findCol('código','codigo','code','clave');
-      const colProd    = findCol('producto','descripcion','nombre','name');
-      const colCosto   = findCol('costo','cost');
-      const colVenta   = findCol('venta','sale','precio venta','p. venta');
-      const colMayoreo = findCol('mayoreo','wholesale','p. mayoreo');
-      const colExist   = findCol('existencia','exist','stock','cantidad');
-      const colMin     = findCol('mínimo','minimo','min');
-      const colMax     = findCol('máximo','maximo','max');
-      const colDept    = findCol('departamento','dept','categoria','category');
+      const cCod  = fc('código','codigo','clave','code');
+      const cProd = fc('producto','descripcion','nombre');
+      const cCost = fc('costo','cost','p. costo');
+      const cVent = fc('venta','sale','p. venta');
+      const cMay  = fc('mayoreo','wholesale','p. mayoreo');
+      const cExis = fc('existencia','exist','stock','cantidad');
+      const cMin  = fc('mínimo','minimo','inv. mínimo','min');
+      const cMax  = fc('máximo','maximo','inv. máximo','max');
+      const cDept = fc('departamento','dept','categoria');
 
-      let imported = 0, skipped = 0;
-      const newProducts = [];
+      const imported = rows
+        .filter(r => String(r[cProd]||'').trim())
+        .map(r => ({
+          codigo:         String(r[cCod]||'').trim(),
+          descripcion:    String(r[cProd]||'').trim(),
+          precio_costo:   pf(r[cCost]),
+          precio_venta:   pf(r[cVent]),
+          precio_mayoreo: pf(r[cMay]),
+          existencia:     pf(r[cExis]),
+          inv_minimo:     pi(r[cMin]),
+          inv_maximo:     pi(r[cMax]),
+          departamento:   String(r[cDept]||'').trim(),
+          proveedor:      '',
+        }));
 
-      rows.forEach(row => {
-        const codigo = String(row[colCodigo] || '').trim();
-        const desc   = String(row[colProd] || '').trim();
-        if (!desc) { skipped++; return; }
+      if (!imported.length) { toast('No se encontraron productos','err'); return; }
 
-        newProducts.push({
-          codigo,
-          descripcion: desc,
-          precio_costo:    parsePrice(row[colCosto]),
-          precio_venta:    parsePrice(row[colVenta]),
-          precio_mayoreo:  parsePrice(row[colMayoreo]),
-          cantidad_inventario: parseFloat(String(row[colExist] || '0').replace(/[$,]/g, '')) || 0,
-          minimo:  parseInt(String(row[colMin] || '0')) || 0,
-          maximo:  parseInt(String(row[colMax] || '0')) || 0,
-          departamento: String(row[colDept] || '').trim(),
-          proveedor: '',
-        });
-        imported++;
-      });
-
-      if (confirm(`Se importarán ${imported} productos. ¿Reemplazar el inventario actual (${products.length} productos)?`)) {
-        products = newProducts;
-        save();
-        updateStats();
-        showToast(`✓ ${imported} productos importados`, 'success');
+      if (confirm(`Se importarán ${imported.length} productos.\n¿Reemplazar el inventario actual (${products.length} productos)?`)) {
+        products = imported;
+        save(); updateStats();
+        toast(`✓ ${imported.length} productos importados`, 'ok');
       }
     } catch(err) {
       console.error(err);
-      showToast('Error al leer el archivo', 'error');
+      toast('Error al leer el archivo', 'err');
     }
-    event.target.value = '';
+    event.target.value='';
   };
   reader.readAsArrayBuffer(file);
 }
 
-// ── Export ───────────────────────────────────────────────────────────
+// ── Export ────────────────────────────────────────────────────────────
 function exportExcel() {
-  if (products.length === 0) { showToast('No hay productos para exportar', 'error'); return; }
-  const rows = products.map(p => ({
-    'Código':        p.codigo || '',
-    'Producto':      p.descripcion,
-    'P. Costo':      p.precio_costo,
-    'P. Venta':      p.precio_venta,
-    'P. Mayoreo':    p.precio_mayoreo || 0,
-    'Existencia':    p.cantidad_inventario,
-    'Inv. Mínimo':   p.minimo,
-    'Inv. Máximo':   p.maximo || 0,
-    'Departamento':  p.departamento || '',
+  if (!products.length) { toast('No hay productos','err'); return; }
+  const rows = products.map(p=>({
+    'Código':      p.codigo||'',
+    'Producto':    p.descripcion,
+    'P. Costo':    p.precio_costo,
+    'P. Venta':    p.precio_venta,
+    'P. Mayoreo':  p.precio_mayoreo||0,
+    'Existencia':  p.existencia,
+    'Inv. Mínimo': p.inv_minimo,
+    'Inv. Máximo': p.inv_maximo||0,
+    'Departamento':p.departamento||'',
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [16, 40, 10, 10, 12, 10, 10, 10, 20].map(w => ({ wch: w }));
+  ws['!cols'] = [16,40,10,10,12,10,10,10,22].map(w=>({wch:w}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
-  const fecha = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, 'inventario_eleventa_' + fecha + '.xlsx');
-  showToast('Archivo descargado', 'success');
+  XLSX.writeFile(wb, 'inventario_eleventa_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toast('Archivo descargado','ok');
 }
 
-// ── Toast ────────────────────────────────────────────────────────────
-let toastTimer;
-function showToast(msg, type = 'success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast ' + type;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+// ── Toast ─────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg, type='ok') {
+  const t=$('toast'); t.textContent=msg; t.className='toast '+type; t.classList.add('show');
+  clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'), 2600);
 }
-
-// ── Init ─────────────────────────────────────────────────────────────
-updateCounters();
 </script>
 </body>
 </html>
